@@ -33,15 +33,15 @@ const TYPE_OPTIONS: ActionItem['type'][] = ['Feature', 'Bug', 'Config', 'Risk', 
 const PRODUCT_OPTIONS = ['AI for Work', 'Search AI', 'Agent Platform'];
 
 const TABLE_COLS = [
-  { key: 'action', label: 'Action Item', width: 220 },
-  { key: 'assignee', label: 'Assignee', width: 100 },
-  { key: 'eta', label: 'ETA', width: 100 },
-  { key: 'product', label: 'Product', width: 90 },
-  { key: 'priority', label: 'Priority', width: 90 },
-  { key: 'type', label: 'Type', width: 90 },
-  { key: 'status', label: 'Status', width: 110 },
-  { key: 'comment', label: 'Comment', width: 160 },
-  { key: 'jiraUrl', label: 'Jira URL', width: 130 },
+  { key: 'action', label: 'Action Item', pct: '22%', wrap: true },
+  { key: 'assignee', label: 'Assignee', pct: '9%', wrap: false },
+  { key: 'eta', label: 'ETA', pct: '8%', wrap: false },
+  { key: 'product', label: 'Product', pct: '10%', wrap: false },
+  { key: 'priority', label: 'Priority', pct: '9%', wrap: false },
+  { key: 'type', label: 'Type', pct: '7%', wrap: false },
+  { key: 'status', label: 'Status', pct: '11%', wrap: false },
+  { key: 'comment', label: 'Comment', pct: '15%', wrap: true },
+  { key: 'jiraUrl', label: 'Jira URL', pct: '9%', wrap: false },
 ] as const;
 
 type ColKey = (typeof TABLE_COLS)[number]['key'];
@@ -109,9 +109,9 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
   }, [draft, value, rowId, col, onEdit]);
 
   const cellStyle: React.CSSProperties = {
-    padding: '6px 10px', fontSize: 11, fontFamily: "'JetBrains Mono',monospace",
-    color: p.textPrimary, verticalAlign: 'middle', whiteSpace: 'nowrap',
-    cursor: 'pointer', minWidth: 60,
+    padding: '7px 10px', fontSize: 11, fontFamily: "'JetBrains Mono',monospace",
+    color: p.textPrimary, verticalAlign: 'top',
+    cursor: 'pointer', wordBreak: 'break-word', lineHeight: 1.5,
   };
 
   const inputStyle: React.CSSProperties = {
@@ -253,16 +253,18 @@ interface ActionTableProps {
 function ActionTable({ items, onEdit }: ActionTableProps) {
   const p = usePalette();
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 14, border: `1px solid ${p.border}` }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+    <div style={{ borderRadius: 14, border: `1px solid ${p.border}`, overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          {TABLE_COLS.map(col => <col key={col.key} style={{ width: col.pct }} />)}
+        </colgroup>
         <thead>
           <tr style={{ background: p.inputBg, borderBottom: `1px solid ${p.borderTint}` }}>
             {TABLE_COLS.map(col => (
               <th key={col.key} style={{
                 padding: '10px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600,
                 letterSpacing: '0.07em', textTransform: 'uppercase', color: p.textMuted,
-                fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap',
-                minWidth: col.width,
+                fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden',
               }}>
                 {col.label}
               </th>
