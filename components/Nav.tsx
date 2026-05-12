@@ -32,7 +32,8 @@ function ShantanuMark({ size = 34 }: { size?: number }) {
 export default function Nav() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const isAuthed = status !== 'loading' && !!session?.user;
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState('viasat');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -132,10 +133,10 @@ export default function Nav() {
           </span>
         </Link>
 
-        <div style={{ width: 1, height: 22, background: dark ? 'rgba(139,124,255,0.2)' : 'rgba(83,74,183,0.15)' }} />
+        {isAuthed && <div style={{ width: 1, height: 22, background: dark ? 'rgba(139,124,255,0.2)' : 'rgba(83,74,183,0.15)' }} />}
 
-        {/* Project picker */}
-        <div style={{ position: 'relative' }}>
+        {/* Project picker — authenticated only */}
+        {isAuthed && <div style={{ position: 'relative' }}>
           <button onClick={() => { setPickerOpen(!pickerOpen); setAvatarOpen(false); }}
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 10,
               cursor: 'pointer', background: dark ? 'rgba(139,124,255,0.08)' : 'rgba(83,74,183,0.06)',
@@ -195,11 +196,11 @@ export default function Nav() {
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
-      {/* Nav links */}
-      <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+      {/* Nav links — authenticated only */}
+      {isAuthed && <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
         {NAV_ITEMS.map(item => {
           const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           return (
@@ -213,21 +214,21 @@ export default function Nav() {
             </Link>
           );
         })}
-      </nav>
+      </nav>}
 
       {/* Right side */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 100,
+        {isAuthed && <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 100,
           background: dark ? 'rgba(28,28,36,0.8)' : 'rgba(182,255,110,0.1)',
           border: `1px solid ${dark ? 'rgba(139,124,255,0.18)' : 'rgba(182,255,110,0.3)'}`,
           fontSize: 11, color: '#B6FF6E', fontFamily: "'JetBrains Mono',monospace" }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#B6FF6E',
             boxShadow: dark ? '0 0 8px #B6FF6E' : 'none', display: 'inline-block' }} />
           Live
-        </div>
+        </div>}
 
-        {/* Avatar — click for dropdown */}
-        <div style={{ position: 'relative' }}>
+        {/* Avatar — authenticated only */}
+        {isAuthed && <div style={{ position: 'relative' }}>
           <button onClick={() => { setAvatarOpen(!avatarOpen); setPickerOpen(false); }}
             style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center',
               justifyContent: 'center', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
@@ -299,7 +300,7 @@ export default function Nav() {
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Close overlays */}
