@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { loadState, onUserChange } from '@/lib/store';
-import type { AppState, Project, ActionItem } from '@/lib/types';
+import type { AppState, Project, ActionItem, DailyActivity } from '@/lib/types';
 import KPICard from '@/components/KPICard';
 import StatusPill from '@/components/StatusPill';
 import PriorityBadge from '@/components/PriorityBadge';
@@ -539,6 +539,131 @@ function RiskRegister({ actions }: { actions: ActionItem[] }) {
   );
 }
 
+function RecentActivityFeed({ activities }: { activities: DailyActivity[] }) {
+  const p = usePalette();
+  const [hovered, setHovered] = useState<string | null>(null);
+  const recent = [...activities]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 8);
+
+  const typeColor = (t: string) => {
+    if (t === 'Meeting') return p.violet;
+    if (t === 'Feature') return p.cyan;
+    if (t === 'Bug') return p.coral;
+    if (t === 'Config') return p.amber;
+    return p.textMuted;
+  };
+
+  return (
+    <div style={{
+      background: p.cardBg,
+      border: `1px solid ${p.border}`,
+      borderRadius: 14,
+      overflow: 'hidden',
+      marginBottom: 28,
+    }}>
+      <div style={{ padding: '18px 22px 14px', borderBottom: `1px solid ${p.borderTint}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: p.textPrimary, letterSpacing: '-0.5px' }}>
+            Recent Activity
+          </div>
+          <div style={{ fontSize: 12, color: p.textMuted, marginTop: 2 }}>
+            {activities.length} log{activities.length !== 1 ? 's' : ''} · active project
+          </div>
+        </div>
+        <div style={{
+          padding: '4px 12px',
+          borderRadius: 100,
+          background: `${p.amber}18`,
+          border: `1px solid ${p.amber}40`,
+          fontSize: 10,
+          fontWeight: 600,
+          color: p.amber,
+          fontFamily: "'JetBrains Mono',monospace",
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>
+          Activity Log
+        </div>
+      </div>
+
+      {recent.length === 0 ? (
+        <div style={{ padding: '32px 22px', textAlign: 'center', color: p.textMuted, fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
+          No activity logged for this project yet.
+        </div>
+      ) : (
+        <div style={{ padding: '8px 0' }}>
+          {recent.map((act, i) => (
+            <div
+              key={act.id}
+              onMouseEnter={() => setHovered(act.id)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 14,
+                padding: '12px 22px',
+                borderBottom: i < recent.length - 1 ? `1px solid ${p.rowBg}` : 'none',
+                background: hovered === act.id ? p.inputBg : 'transparent',
+                transition: 'background 0.15s',
+              }}
+            >
+              {/* Date bubble */}
+              <div style={{
+                flexShrink: 0,
+                width: 42,
+                textAlign: 'center',
+                borderRadius: 8,
+                background: p.inputBg,
+                padding: '5px 0',
+              }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: p.textPrimary, fontFamily: "'Space Grotesk',sans-serif", lineHeight: 1 }}>
+                  {new Date(act.date).getDate()}
+                </div>
+                <div style={{ fontSize: 9, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", textTransform: 'uppercase', marginTop: 2 }}>
+                  {new Date(act.date).toLocaleDateString('en-GB', { month: 'short' })}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: p.textPrimary, fontFamily: "'Space Grotesk',sans-serif", marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {act.activity}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace" }}>
+                    {act.team}
+                  </span>
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: typeColor(act.type),
+                    background: `${typeColor(act.type)}18`,
+                    border: `1px solid ${typeColor(act.type)}30`,
+                    borderRadius: 4,
+                    padding: '1px 6px',
+                    fontFamily: "'JetBrains Mono',monospace",
+                    letterSpacing: '0.04em',
+                  }}>
+                    {act.type}
+                  </span>
+                </div>
+              </div>
+
+              {/* Hours */}
+              <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: p.cyan, fontFamily: "'Space Grotesk',sans-serif", textShadow: p.glow ? `0 0 10px ${p.cyan}` : 'none' }}>
+                  {act.hours}h
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -574,6 +699,12 @@ export default function DashboardPage() {
     if (!activeProject) return true;
     if (a.projectId) return a.projectId === activeProject.id;
     // Legacy items without projectId — show them all
+    return true;
+  });
+
+  const projectActivities = state.activities.filter(a => {
+    if (!activeProject) return true;
+    if (a.projectId) return a.projectId === activeProject.id;
     return true;
   });
 
@@ -618,6 +749,8 @@ export default function DashboardPage() {
         </div>
 
         <GanttChart projects={state.projects} />
+
+        <RecentActivityFeed activities={projectActivities} />
 
         <RiskRegister actions={projectActions} />
       </div>

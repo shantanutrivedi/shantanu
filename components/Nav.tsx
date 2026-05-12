@@ -11,6 +11,7 @@ import type { Project } from '@/lib/types';
 const NAV_ITEMS = [
   { href: '/workbench', label: 'Workbench' },
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/tasks', label: 'Tasks' },
   { href: '/activity', label: 'Activity' },
   { href: '/summary', label: 'Summary' },
 ];
