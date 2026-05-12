@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { loadState } from '@/lib/store';
+import { loadState, onUserChange } from '@/lib/store';
 import type { AppState, ActionItem, DailyActivity } from '@/lib/types';
 import { usePalette } from '@/lib/palette';
 
@@ -296,7 +296,10 @@ export default function SummaryPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setAppState(loadState());
+    const sync = () => setAppState(loadState());
+    sync();
+    const unsub = onUserChange(sync);
+    return unsub;
   }, []);
 
   const week = getWeekRange(weekOffset);

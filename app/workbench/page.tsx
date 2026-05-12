@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { loadState, saveState } from '@/lib/store';
+import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import type { ActionItem, MOMUpload, AppState } from '@/lib/types';
 
@@ -311,7 +311,10 @@ export default function WorkbenchPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setAppState(loadState());
+    const sync = () => setAppState(loadState());
+    sync();
+    const unsub = onUserChange(sync);
+    return unsub;
   }, []);
 
   const readFile = useCallback((file: File) => {

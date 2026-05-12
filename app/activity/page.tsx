@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { loadState, saveState } from '@/lib/store';
+import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import type { AppState, DailyActivity, Project } from '@/lib/types';
 
@@ -145,19 +145,19 @@ export default function ActivityPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const state = loadState();
-    setAppState(state);
-    const active = state.projects.find((pr: Project) => pr.id === state.activeProjectId);
-    if (active) setProductInput(active.name);
-
-    function onProjectChange() {
-      const s = loadState();
-      setAppState(s);
-      const pr = s.projects.find((proj: Project) => proj.id === s.activeProjectId);
-      if (pr) setProductInput(pr.name);
+    function sync() {
+      const state = loadState();
+      setAppState(state);
+      const active = state.projects.find((pr: Project) => pr.id === state.activeProjectId);
+      if (active) setProductInput(active.name);
     }
-    window.addEventListener('shantanu-project-change', onProjectChange);
-    return () => window.removeEventListener('shantanu-project-change', onProjectChange);
+    sync();
+    window.addEventListener('shantanu-project-change', sync);
+    const unsub = onUserChange(sync);
+    return () => {
+      window.removeEventListener('shantanu-project-change', sync);
+      unsub();
+    };
   }, []);
 
   const activeProject = appState?.projects.find((pr: Project) => pr.id === appState.activeProjectId);

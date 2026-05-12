@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { loadState } from '@/lib/store';
+import { loadState, onUserChange } from '@/lib/store';
 import type { AppState, Project, ActionItem } from '@/lib/types';
 import KPICard from '@/components/KPICard';
 import StatusPill from '@/components/StatusPill';
@@ -552,7 +552,11 @@ export default function DashboardPage() {
   useEffect(() => {
     reload();
     window.addEventListener('shantanu-project-change', reload);
-    return () => window.removeEventListener('shantanu-project-change', reload);
+    const unsub = onUserChange(reload);
+    return () => {
+      window.removeEventListener('shantanu-project-change', reload);
+      unsub();
+    };
   }, []);
 
   if (!state) {

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { loadState, saveState } from '@/lib/store';
+import { loadState, saveState, onUserChange } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { loadProfile, getInitials } from '@/lib/userProfile';
 import type { Project } from '@/lib/types';
@@ -64,7 +64,11 @@ export default function Nav() {
     };
     sync();
     window.addEventListener('shantanu-project-change', sync);
-    return () => window.removeEventListener('shantanu-project-change', sync);
+    const unsub = onUserChange(sync);
+    return () => {
+      window.removeEventListener('shantanu-project-change', sync);
+      unsub();
+    };
   }, []);
 
   const activeProject = projects.find(p => p.id === activeId);

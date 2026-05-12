@@ -1,16 +1,16 @@
 'use client';
-import { SessionProvider } from 'next-auth/react';
-import { useSession } from 'next-auth/react';
+import { SessionProvider, useSession } from 'next-auth/react';
 import { useEffect } from 'react';
 import { setCurrentUser } from '@/lib/store';
 
 function SessionInit() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   useEffect(() => {
+    if (status === 'loading') return;
     if (session?.user?.id) {
       setCurrentUser(session.user.id);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, status]);
   return null;
 }
 
