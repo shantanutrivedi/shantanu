@@ -18,25 +18,23 @@ export function setCurrentUser(id: string) {
   if (id === _userId) return;
 
   if (typeof window !== 'undefined') {
-    // Migrate any data from the guest key into this user's key (first sign-in)
-    const guestKey = 'shantanu_state_guest';
-    const userKey  = `shantanu_state_${id}`;
+    const userKey = `shantanu_state_${id}`;
     try {
-      const guestRaw = localStorage.getItem(guestKey);
-      const userRaw  = localStorage.getItem(userKey);
-      if (guestRaw && !userRaw) {
-        localStorage.setItem(userKey, guestRaw);
+      const userRaw = localStorage.getItem(userKey);
+      if (!userRaw) {
+        // Migration priority: original key → guest-suffixed key
+        const legacy = localStorage.getItem('shantanu_state') ||
+                       localStorage.getItem('shantanu_state_guest');
+        if (legacy) localStorage.setItem(userKey, legacy);
       }
     } catch {}
 
-    // Persist so stateKey() can resolve correctly before the next effect fires
     if (id !== 'guest') {
       try { localStorage.setItem(LAST_USER_KEY, id); } catch {}
     }
   }
 
   _userId = id;
-  // Notify all subscribed pages to reload state
   _listeners.forEach(fn => fn());
 }
 
@@ -44,14 +42,16 @@ export function getCurrentUser() {
   return _userId;
 }
 
-// Resolves the correct key even before setCurrentUser() is called
-// by falling back to the last persisted user ID from localStorage.
+// Resolves the correct key even before setCurrentUser() fires.
+// Falls back: in-memory userId → persisted last user → legacy key → guest key.
 function stateKey(): string {
   if (_userId !== 'guest') return `shantanu_state_${_userId}`;
   if (typeof window !== 'undefined') {
     try {
       const cached = localStorage.getItem(LAST_USER_KEY);
       if (cached) return `shantanu_state_${cached}`;
+      // Original pre-auth key — used until data is migrated
+      if (localStorage.getItem('shantanu_state')) return 'shantanu_state';
     } catch {}
   }
   return 'shantanu_state_guest';
