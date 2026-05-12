@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
-import type { AppState, DailyActivity, Project } from '@/lib/types';
+import type { AppState, DailyActivity } from '@/lib/types';
 
 // ── Type color maps ───────────────────────────────────────────────────────────
 const TYPE_COLORS_DARK: Record<DailyActivity['type'], string> = {
@@ -138,7 +138,9 @@ export default function ActivityPage() {
   const [activity, setActivity] = useState<string>('');
   const [type, setType] = useState<DailyActivity['type']>('Feature');
   const [hours, setHours] = useState<number>(1);
-  const [productInput, setProductInput] = useState<string>('');
+
+  const [product, setProduct] = useState<string>('');
+  const PRODUCTS = ['AI for Work', 'Search AI', 'Agent Platform'];
 
   const [submitting, setSubmitting] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -148,8 +150,6 @@ export default function ActivityPage() {
     function sync() {
       const state = loadState();
       setAppState(state);
-      const active = state.projects.find((pr: Project) => pr.id === state.activeProjectId);
-      if (active) setProductInput(active.name);
     }
     sync();
     window.addEventListener('shantanu-project-change', sync);
@@ -160,11 +160,11 @@ export default function ActivityPage() {
     };
   }, []);
 
-  const activeProject = appState?.projects.find((pr: Project) => pr.id === appState.activeProjectId);
+  const activeProject = appState?.projects.find(pr => pr.id === appState.activeProjectId);
 
   const projectActivities: DailyActivity[] = (appState?.activities ?? [])
-    .filter((a: DailyActivity) => a.projectId === appState?.activeProjectId)
-    .sort((a: DailyActivity, b: DailyActivity) => b.date.localeCompare(a.date));
+    .filter(a => a.projectId === appState?.activeProjectId)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   // Stats — current week
   const weekActivities = projectActivities.filter(a => isThisWeek(a.date));
@@ -202,6 +202,7 @@ export default function ActivityPage() {
       team: team.trim(),
       activity: activity.trim(),
       type,
+      product: product || undefined,
       hours,
       createdAt: new Date().toISOString(),
     };
@@ -218,6 +219,7 @@ export default function ActivityPage() {
     setTeam('');
     setActivity('');
     setType('Feature');
+    setProduct('');
     setHours(1);
     setFieldErrors({});
     setSubmitting(false);
@@ -358,7 +360,7 @@ export default function ActivityPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Team Member</label>
+              <label style={labelStyle}>Assignee</label>
               <input
                 type="text"
                 value={team}
@@ -418,20 +420,17 @@ export default function ActivityPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Product / Project</label>
-              <input
-                type="text"
-                value={productInput}
-                onChange={e => setProductInput(e.target.value)}
-                placeholder="Which product?"
-                style={inputBase}
-                list="project-datalist"
-              />
-              <datalist id="project-datalist">
-                {(appState?.projects ?? []).map((pr: Project) => (
-                  <option key={pr.id} value={pr.name} />
+              <label style={labelStyle}>Product</label>
+              <select
+                value={product}
+                onChange={e => setProduct(e.target.value)}
+                style={{ ...inputBase, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+              >
+                <option value="" style={{ background: p.cardSolid, color: p.textMuted }}>— Select product —</option>
+                {PRODUCTS.map(pr => (
+                  <option key={pr} value={pr} style={{ background: p.cardSolid, color: p.textPrimary }}>{pr}</option>
                 ))}
-              </datalist>
+              </select>
             </div>
           </div>
 

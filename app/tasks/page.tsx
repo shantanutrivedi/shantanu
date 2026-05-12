@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { loadState, onUserChange } from '@/lib/store';
+import { useSession } from 'next-auth/react';
+import { loadState, saveState, onUserChange } from '@/lib/store';
+import { loadJiraConfig } from '@/lib/userConfig';
 import { usePalette } from '@/lib/palette';
 import type { Palette } from '@/lib/palette';
 import type { AppState, ActionItem, DailyActivity } from '@/lib/types';
@@ -227,11 +229,14 @@ type ColKey = (typeof COLS)[number]['key'];
 
 export default function TasksPage() {
   const p = usePalette();
+  const { data: session } = useSession();
   const [state, setState] = useState<AppState | null>(null);
   const [productFilter, setProductFilter] = useState('');
   const [colFilters, setColFilters] = useState<Partial<Record<ColKey, string>>>({});
   const [openFilter, setOpenFilter] = useState<ColKey | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ updated: number; error?: string } | null>(null);
 
   useEffect(() => {
     const sync = () => setState(loadState());
@@ -240,6 +245,63 @@ export default function TasksPage() {
     window.addEventListener('shantanu-project-change', sync);
     return () => { unsub(); window.removeEventListener('shantanu-project-change', sync); };
   }, []);
+
+  const userId = session?.user?.id || 'guest';
+
+  // Items in the current filtered view that have a Jira URL
+  const jiraItems = useMemo(() => {
+    if (!state) return [];
+    return state.actionItems.filter(a => a.jiraUrl?.trim());
+  }, [state]);
+
+  async function handleJiraSync() {
+    if (!state || jiraItems.length === 0) return;
+    setSyncing(true);
+    setSyncResult(null);
+
+    const jiraConfig = loadJiraConfig(userId);
+    if (!jiraConfig.baseUrl || !jiraConfig.email || !jiraConfig.apiToken) {
+      setSyncResult({ updated: 0, error: 'Jira not configured. Go to Settings → Connectors.' });
+      setSyncing(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/jira-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: jiraItems.map(a => ({ id: a.id, jiraUrl: a.jiraUrl })),
+          jiraConfig,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResult({ updated: 0, error: data.error || 'Sync failed' });
+        return;
+      }
+
+      const updatedState = loadState();
+      let updated = 0;
+      for (const r of data.results) {
+        if (r.status) {
+          const idx = updatedState.actionItems.findIndex(a => a.id === r.id);
+          if (idx >= 0 && updatedState.actionItems[idx].status !== r.status) {
+            updatedState.actionItems[idx] = { ...updatedState.actionItems[idx], status: r.status as ActionItem['status'] };
+            updated++;
+          }
+        }
+      }
+      saveState(updatedState);
+      setState(updatedState);
+      setSyncResult({ updated });
+    } catch {
+      setSyncResult({ updated: 0, error: 'Network error' });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 4000);
+    }
+  }
 
   // Build unified task list
   const allTasks = useMemo<Task[]>(() => {
@@ -328,16 +390,47 @@ export default function TasksPage() {
       <div style={{ position:'relative', zIndex:1, maxWidth:1400, margin:'0 auto', padding:'36px 32px 80px' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase', color: p.violet, fontFamily:"'JetBrains Mono',monospace", marginBottom: 8 }}>
-            Unified View
+        <div style={{ marginBottom: 28, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16 }}>
+          <div>
+            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase', color: p.violet, fontFamily:"'JetBrains Mono',monospace", marginBottom: 8 }}>
+              Unified View
+            </div>
+            <h1 style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:34, letterSpacing:'-1px', color: p.textPrimary, margin:'0 0 6px' }}>
+              Tasks
+            </h1>
+            <p style={{ color: p.textMuted, fontSize:13, fontFamily:"'Inter',sans-serif", margin:0 }}>
+              All action items and activity logs — {filtered.length} of {allTasks.length} tasks
+            </p>
           </div>
-          <h1 style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:34, letterSpacing:'-1px', color: p.textPrimary, margin:'0 0 6px' }}>
-            Tasks
-          </h1>
-          <p style={{ color: p.textMuted, fontSize:13, fontFamily:"'Inter',sans-serif", margin:0 }}>
-            All action items and activity logs — {filtered.length} of {allTasks.length} tasks
-          </p>
+
+          {/* Jira Sync button */}
+          {jiraItems.length > 0 && (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6, flexShrink:0 }}>
+              <button onClick={handleJiraSync} disabled={syncing}
+                style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  padding:'10px 20px', borderRadius:10, cursor: syncing ? 'not-allowed' : 'pointer',
+                  background:'linear-gradient(135deg,#0052CC,#2684FF)',
+                  border:'none', color:'#fff', fontFamily:"'Space Grotesk',sans-serif",
+                  fontWeight:600, fontSize:13, opacity: syncing ? 0.7 : 1,
+                  boxShadow: p.glow ? '0 0 18px rgba(0,82,204,0.4)' : '0 2px 8px rgba(0,82,204,0.3)',
+                  transition:'all 0.15s',
+                }}>
+                <span style={{ fontSize:14 }}>⟳</span>
+                {syncing ? 'Syncing…' : `Sync Jira (${jiraItems.length})`}
+              </button>
+              {syncResult && (
+                <div style={{
+                  fontSize:11, fontFamily:"'JetBrains Mono',monospace",
+                  color: syncResult.error ? p.coral : p.lime,
+                  padding:'4px 10px', borderRadius:6,
+                  background: syncResult.error ? `${p.coral}14` : `${p.lime}14`,
+                }}>
+                  {syncResult.error || `✓ ${syncResult.updated} item${syncResult.updated !== 1 ? 's' : ''} updated`}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Product filter buttons */}

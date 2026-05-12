@@ -24,9 +24,10 @@ export interface DailyActivity {
   id: string;
   date: string;
   projectId: string;
-  team: string;
+  team: string;       // person / assignee
   activity: string;
   type: 'Feature' | 'Bug' | 'Config' | 'Meeting' | 'Other';
+  product?: string;   // AI for Work | Search AI | Agent Platform
   hours: number;
   createdAt: string;
 }

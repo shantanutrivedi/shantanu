@@ -137,14 +137,15 @@ function ProjectHealthBanner({ project }: { project: Project | undefined }) {
   );
 }
 
-function KPIGrid({ total, done, blocked, pct }: { total: number; done: number; blocked: number; pct: number }) {
+function KPIGrid({ total, done, blocked, pct, activityCount }: { total: number; done: number; blocked: number; pct: number; activityCount: number }) {
   const p = usePalette();
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 28 }}>
-      <KPICard label="Total Actions" value={total} sub="across active project" color={p.violet} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16, marginBottom: 28 }}>
+      <KPICard label="Total Work" value={total + activityCount} sub="actions + activities" color={p.violet} />
+      <KPICard label="Action Items" value={total} sub="from MOM uploads" color={p.cyan} />
       <KPICard label="Done" value={done} sub={`${total > 0 ? Math.round((done / total) * 100) : 0}% complete`} color={p.lime} />
       <KPICard label="Blocked" value={blocked} sub={blocked > 0 ? 'needs attention' : 'all clear'} color={p.coral} />
-      <KPICard label="On-track %" value={`${pct}%`} sub="done / total" color={pct >= 70 ? p.lime : pct >= 40 ? p.amber : p.coral} />
+      <KPICard label="Activities" value={activityCount} sub="logged entries" color={p.amber} />
     </div>
   );
 }
@@ -741,7 +742,7 @@ export default function DashboardPage() {
 
         <ProjectHealthBanner project={activeProject} />
 
-        <KPIGrid total={total} done={done} blocked={blocked} pct={pct} />
+        <KPIGrid total={total} done={done} blocked={blocked} pct={pct} activityCount={projectActivities.length} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20, marginBottom: 28 }}>
           <ActionSummaryTable actions={projectActions} />

@@ -405,10 +405,11 @@ export default function WorkbenchPage() {
       parsedItems,
     };
     const activeProject = appState.projects.find(proj => proj.id === appState.activeProjectId);
+    const VALID_PRODUCTS = ['AI for Work', 'Search AI', 'Agent Platform'];
     const taggedItems = parsedItems.map(item => ({
       ...item,
       projectId: appState.activeProjectId,
-      product: item.product && item.product !== 'General' ? item.product : (activeProject?.name || item.product),
+      product: VALID_PRODUCTS.includes(item.product) ? item.product : '',
     }));
     const incomingIds = new Set(taggedItems.map(t => t.id));
     const newState: AppState = {
