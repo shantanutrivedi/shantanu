@@ -560,11 +560,16 @@ export default function DashboardPage() {
 
   const activeProject = state.projects.find(p => p.id === state.activeProjectId);
 
-  // KPI — scoped to active project (match by product name fragment)
+  // Show all actions — or filter loosely if product field matches project
   const projectActions = state.actionItems.filter(a => {
     if (!activeProject) return true;
-    return a.product.toLowerCase().includes(activeProject.id) ||
-           activeProject.name.toLowerCase().includes(a.product.toLowerCase());
+    // If the action has no product set, show it
+    if (!a.product || a.product === 'General' || a.product === '') return true;
+    const prod = a.product.toLowerCase();
+    const pid = activeProject.id.toLowerCase();
+    const pname = activeProject.name.toLowerCase();
+    return prod.includes(pid) || pid.includes(prod) ||
+           pname.includes(prod) || prod.includes(pname.split('·')[0].trim());
   });
 
   const total = projectActions.length;
