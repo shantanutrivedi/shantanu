@@ -1,201 +1,182 @@
 'use client';
-import Link from 'next/link';
-import { usePalette } from '@/lib/palette';
+import { signIn } from 'next-auth/react';
+import { useTheme } from '@/lib/theme';
+
+function ShantanuMark({ size = 52 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 60 60" aria-hidden="true">
+      <circle cx="30" cy="30" r="24" fill="#26215C" />
+      <circle cx="30" cy="30" r="17.5" fill="#1e1a4e" />
+      <path d="M 22.3 24.2 C 22.3 19 26.1 16.6 30.5 16.6 C 34.9 16.6 37.2 20.8 37.2 25 C 37.2 29.2 33.9 31.3 30.5 33 C 27.1 34.7 23.7 37 23.7 41.5 C 23.7 45.1 27.6 47.5 32 47.5 C 36.4 47.5 38.9 44.5 40.7 41.4"
+        fill="none" stroke="#EEEDFE" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx="22.3" cy="24.2" r="2.2" fill="#F0997B" />
+      <circle cx="40.7" cy="41.4" r="2.2" fill="#F0997B" />
+    </svg>
+  );
+}
 
 const FEATURES = [
-  { t: 'MOM → Actions', d: 'Paste meeting notes. Shantanu extracts decisions, owners, risks, and ETAs in under two seconds.', c: 'violet' as const },
-  { t: 'Two-way Jira', d: 'Edit the action table. We push it to Jira. Always in sync, zero copy-paste.', c: 'cyan' as const },
-  { t: 'Go-live tracking', d: 'Calendar of cutovers and milestones. Nothing slips without a flag.', c: 'coral' as const },
-  { t: 'Weekly auto-digest', d: 'Leadership rollup generated from your data. No more screenshots or status calls.', c: 'lime' as const },
+  { icon: '⚡', title: 'MOM → Action Table', desc: 'Upload meeting notes, AI extracts every action item in seconds.' },
+  { icon: '📊', title: 'Live Dashboard', desc: 'KPIs, Gantt timeline, risks, and go-live status — always in sync.' },
+  { icon: '📝', title: 'Daily Activity Log', desc: 'Team entries feed straight into your weekly report.' },
+  { icon: '✦', title: 'Executive Summary', desc: 'One click generates a polished AI-written report ready to share.' },
 ];
 
-const MOM_LINES = [
-  'Riya: pricing FAQ needs to land by 14th',
-  'Jay: blocked on infra cap for staging',
-  'Riya: report on Atlas auth dependency',
-  'Devika: schedule advisory for v2 customers',
-  'Akash: triage Helix risk by Friday',
-];
+export default function SignInPage() {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
-const TABLE_ROWS = [
-  { action: 'Pricing FAQ landing page', assignee: 'Riya', eta: 'Jul 14', product: 'Atlas', priority: 'High', status: 'In Progress' },
-  { action: 'Resolve infra capacity', assignee: 'Jay', eta: 'Jul 12', product: 'Atlas', priority: 'High', status: 'Blocked' },
-  { action: 'Auth dependency report', assignee: 'Riya', eta: 'Jul 15', product: 'Atlas', priority: 'Medium', status: 'Pending' },
-  { action: 'Schedule advisory', assignee: 'Devika', eta: 'Jul 20', product: 'Helix', priority: 'Medium', status: 'Pending' },
-  { action: 'Triage Helix risk', assignee: 'Akash', eta: 'Jul 12', product: 'Helix', priority: 'High', status: 'In Progress' },
-];
-
-export default function HomePage() {
-  const p = usePalette();
-
-  const STATUS_COLORS: Record<string, string> = {
-    'Done': p.lime, 'In Progress': p.cyan, 'Blocked': p.coral, 'Pending': p.violet,
-  };
-  const PRIORITY_COLORS: Record<string, string> = { High: p.coral, Medium: p.amber, Low: p.textBody };
-
-  const featureColor = (c: 'violet' | 'cyan' | 'coral' | 'lime') => p[c];
-
-  const glowBg = p.glow
-    ? 'radial-gradient(ellipse at 20% -10%, rgba(139,124,255,0.55), transparent 50%), radial-gradient(ellipse at 85% 15%, rgba(255,176,137,0.30), transparent 45%), radial-gradient(ellipse at 50% 40%, rgba(86,224,255,0.18), transparent 55%)'
-    : 'radial-gradient(ellipse at 20% -10%, rgba(85,72,217,0.15), transparent 50%), radial-gradient(ellipse at 85% 15%, rgba(217,97,74,0.12), transparent 45%)';
+  const pageBg    = dark ? '#1C1C24' : '#F2F1FC';
+  const cardBg    = dark ? 'rgba(28,28,36,0.92)' : 'rgba(255,255,255,0.97)';
+  const border    = dark ? 'rgba(139,124,255,0.2)' : 'rgba(83,74,183,0.15)';
+  const textPrimary = dark ? '#EEEDFE' : '#1C1C24';
+  const textMuted   = dark ? '#7B7796' : '#7B7796';
+  const textBody    = dark ? '#B7B3DC' : '#3D3960';
+  const inputBg     = dark ? 'rgba(139,124,255,0.08)' : 'rgba(83,74,183,0.06)';
 
   return (
-    <div style={{ background: p.pageBg, color: p.textBody, position: 'relative', overflow: 'hidden' }}>
+    <div style={{
+      minHeight: 'calc(100vh - 64px)', background: pageBg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '40px 24px', position: 'relative', overflow: 'hidden',
+    }}>
+      {dark && (
+        <div style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+          background: 'radial-gradient(ellipse at 20% 30%, rgba(139,124,255,0.15), transparent 55%), radial-gradient(ellipse at 80% 70%, rgba(240,153,123,0.08), transparent 50%)',
+        }} />
+      )}
 
-      {/* Layered glow background */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: glowBg }} />
+      <div style={{
+        position: 'relative', zIndex: 1, width: '100%', maxWidth: 940,
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center',
+      }}>
 
-      {/* ─── Hero ─────────────────────────────────────────────────── */}
-      <section style={{ position: 'relative', padding: '72px 48px 56px', maxWidth: 1280, margin: '0 auto', textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 14px', borderRadius: 100,
-          border: `1px solid ${p.border}`, background: p.inputBg,
-          fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: p.violet,
-          fontFamily: "'JetBrains Mono',monospace", marginBottom: 28 }}>
-          <span style={{ width: 6, height: 6, borderRadius: 3, background: p.lime,
-            boxShadow: p.glow ? `0 0 8px ${p.lime}` : 'none', display: 'inline-block' }} />
-          Real-time · auto-synced
-        </div>
-
-        <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 88, lineHeight: 0.98,
-          letterSpacing: '-3.6px', color: p.textPrimary, margin: '0 auto', maxWidth: 980 }}>
-          Automate{' '}
-          <span style={{ color: p.midViolet, textShadow: p.glow ? `0 0 28px ${p.violet}70` : 'none' }}>everything</span>.{' '}
-          <br />
-          Own the{' '}
-          <span style={{ color: p.midViolet, textShadow: p.glow ? `0 0 28px ${p.violet}70` : 'none' }}>outcome</span>
-          <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: '50%', background: p.coral,
-            boxShadow: p.glow ? `0 0 16px ${p.coral}` : 'none', marginLeft: 8, verticalAlign: 'middle' }} />
-        </h1>
-
-        <p style={{ fontSize: 17, lineHeight: 1.55, color: p.textBody, maxWidth: 600, margin: '26px auto 30px' }}>
-          MOM in, action plan out. Live status. Synced Jira. Auto rollups.
-          The dull part of program management — automated.
-        </p>
-
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 56 }}>
-          <Link href="/workbench" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px',
-            borderRadius: 12, fontWeight: 600, fontSize: 15, color: '#EEEDFE',
-            background: 'linear-gradient(135deg,#534AB7,#7F77DD)', boxShadow: p.glow ? '0 0 24px rgba(83,74,183,0.5)' : 'none',
-            textDecoration: 'none', fontFamily: "'Space Grotesk',sans-serif" }}>
-            Start automating
-          </Link>
-          <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px',
-            borderRadius: 12, fontWeight: 600, fontSize: 15, color: p.textPrimary,
-            border: `1px solid ${p.border}`, background: p.inputBg,
-            textDecoration: 'none', fontFamily: "'Space Grotesk',sans-serif" }}>
-            View dashboard ↗
-          </Link>
-        </div>
-
-        {/* Transformation diagram */}
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 80px 1fr', gap: 16, alignItems: 'center', textAlign: 'left', maxWidth: 1080, margin: '0 auto' }}>
-
-          {/* MOM file preview */}
-          <div style={{ background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 16, padding: 18,
-            fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: p.textBody,
-            boxShadow: p.glow ? `0 0 32px ${p.violet}38` : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600, color: p.violet }}>
-              <span style={{ width: 7, height: 7, borderRadius: 4, background: p.coral,
-                boxShadow: p.glow ? `0 0 8px ${p.coral}E0` : 'none', display: 'inline-block' }} />
-              q3-planning-mom.txt
-            </div>
-            {MOM_LINES.map((l, i) => (
-              <div key={i} style={{ padding: '3px 0', color: p.textMuted, opacity: 1 - i * 0.07, lineHeight: 1.4 }}>{l}</div>
-            ))}
-            <div style={{ marginTop: 10, fontSize: 10, color: p.textMuted }}>+ 28 lines</div>
-          </div>
-
-          {/* Arrow */}
-          <div style={{ position: 'relative', height: 4, margin: '0 6px' }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 2,
-              background: 'linear-gradient(90deg,#534AB7,#F0997B)',
-              boxShadow: p.glow ? `0 0 14px ${p.violet}60, 0 0 22px ${p.coral}40` : 'none' }} />
-            <div style={{ position: 'absolute', right: -10, top: -10, width: 0, height: 0,
-              borderLeft: '14px solid #F0997B', borderTop: '10px solid transparent', borderBottom: '10px solid transparent',
-              filter: p.glow ? 'drop-shadow(0 0 6px rgba(255,176,137,0.8))' : 'none' }} />
-            <div style={{ position: 'absolute', top: -26, left: 0, right: 0, textAlign: 'center',
-              fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: p.violet,
-              letterSpacing: '0.06em', textTransform: 'uppercase' }}>auto · 1.4s</div>
-          </div>
-
-          {/* Action table preview */}
-          <div style={{ background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 16, overflow: 'hidden',
-            boxShadow: p.glow ? `0 0 32px ${p.violet}20` : 'none' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${p.borderTint}`, background: p.inputBg }}>
-                  {['Action Item', 'Assignee', 'ETA', 'Priority', 'Status'].map(h => (
-                    <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600,
-                      letterSpacing: '0.06em', textTransform: 'uppercase', color: p.textMuted,
-                      fontFamily: "'JetBrains Mono',monospace" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {TABLE_ROWS.map((row, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${p.borderTint}` }}>
-                    <td style={{ padding: '7px 10px', fontSize: 11, color: p.textPrimary, fontFamily: "'Inter',sans-serif" }}>{row.action}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace" }}>{row.assignee}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace" }}>{row.eta}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 11, color: PRIORITY_COLORS[row.priority], fontFamily: "'JetBrains Mono',monospace" }}>{row.priority}</td>
-                    <td style={{ padding: '7px 10px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                        borderRadius: 100, fontSize: 10, fontFamily: "'JetBrains Mono',monospace",
-                        background: `${STATUS_COLORS[row.status]}18`, color: STATUS_COLORS[row.status],
-                        border: `1px solid ${STATUS_COLORS[row.status]}30` }}>
-                        {row.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Feature grid ────────────────────────────────────────── */}
-      <section style={{ padding: '0 48px 56px', maxWidth: 1280, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
-          {FEATURES.map(f => {
-            const color = featureColor(f.c);
-            return (
-              <div key={f.t} style={{ background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 16, padding: 20 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: color,
-                  boxShadow: p.glow ? `0 0 10px ${color}` : 'none', marginBottom: 12 }} />
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16, letterSpacing: '-0.3px', color: p.textPrimary, marginBottom: 6 }}>{f.t}</div>
-                <div style={{ fontSize: 12, lineHeight: 1.5, color: p.textMuted }}>{f.d}</div>
+        {/* Left: Branding */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 36 }}>
+            <ShantanuMark size={52} />
+            <div>
+              <div style={{
+                fontFamily: "'Space Grotesk',sans-serif", fontWeight: 900, fontSize: 22,
+                letterSpacing: '-1.5px', color: textPrimary, lineHeight: 1,
+              }}>
+                SHAN<span style={{ color: '#7F77DD' }}>TANU</span>
+                <span style={{
+                  display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                  background: '#F0997B', marginLeft: 2, verticalAlign: 'super',
+                }} />
               </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ─── CTA strip ───────────────────────────────────────────── */}
-      <section style={{ padding: '0 48px 80px', maxWidth: 1280, margin: '0 auto' }}>
-        <div style={{ borderRadius: 22, padding: '48px 56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'linear-gradient(135deg, rgba(83,74,183,0.25), rgba(240,153,123,0.15))',
-          border: `1px solid ${p.border}`, boxShadow: p.glow ? '0 24px 80px -20px rgba(83,74,183,0.4)' : 'none' }}>
-          <div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 36, letterSpacing: '-1.2px', color: p.textPrimary, marginBottom: 8 }}>
-              Ready to cut status meetings by 60%?
+              <div style={{ fontSize: 11, color: textMuted, fontFamily: "'JetBrains Mono',monospace", marginTop: 3 }}>
+                Program Intelligence
+              </div>
             </div>
-            <div style={{ fontSize: 15, color: p.textBody }}>Drop your first MOM and watch it become an action plan.</div>
           </div>
-          <Link href="/workbench" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 32px',
-            borderRadius: 14, fontWeight: 700, fontSize: 16, color: '#EEEDFE', whiteSpace: 'nowrap',
-            background: 'linear-gradient(135deg,#534AB7,#7F77DD)', boxShadow: p.glow ? '0 0 28px rgba(83,74,183,0.6)' : 'none',
-            textDecoration: 'none', fontFamily: "'Space Grotesk',sans-serif" }}>
-            Open Workbench →
-          </Link>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer style={{ borderTop: `1px solid ${p.borderTint}`, padding: '24px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, color: p.textMuted, fontSize: 14 }}>Shantanu</span>
-        <span style={{ fontSize: 12, color: p.textMuted }}>Built for program leads</span>
-      </footer>
+          <h1 style={{
+            fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 38,
+            letterSpacing: '-1.5px', color: textPrimary, lineHeight: 1.15, margin: '0 0 16px',
+          }}>
+            Run every project<br />
+            <span style={{ color: '#8B7CFF' }}>like a pro.</span>
+          </h1>
+          <p style={{
+            color: textBody, fontSize: 15, lineHeight: 1.65, margin: '0 0 36px',
+            fontFamily: "'Inter',sans-serif", maxWidth: 400,
+          }}>
+            Paste your meeting notes, get an action table. Track progress, log activity, and generate executive summaries — powered by Claude AI.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {FEATURES.map(f => (
+              <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <span style={{
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  background: inputBg, border: `1px solid ${border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                }}>
+                  {f.icon}
+                </span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: textPrimary, fontFamily: "'Space Grotesk',sans-serif", marginBottom: 2 }}>
+                    {f.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.5 }}>
+                    {f.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Sign-in card */}
+        <div style={{
+          background: cardBg, border: `1px solid ${border}`, borderRadius: 24,
+          padding: '48px 40px',
+          boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.5)' : '0 8px 40px rgba(83,74,183,0.12)',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 36 }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 16, margin: '0 auto 18px',
+              background: 'linear-gradient(135deg,#534AB7,#7F77DD)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
+              boxShadow: dark ? '0 0 28px rgba(139,124,255,0.45)' : '0 4px 16px rgba(83,74,183,0.3)',
+            }}>
+              ✦
+            </div>
+            <h2 style={{
+              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26,
+              letterSpacing: '-0.5px', color: textPrimary, margin: '0 0 8px',
+            }}>
+              Welcome back
+            </h2>
+            <p style={{ color: textMuted, fontSize: 13, fontFamily: "'Inter',sans-serif", margin: 0 }}>
+              Sign in to access your project dashboard
+            </p>
+          </div>
+
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+              padding: '14px 24px', borderRadius: 12, cursor: 'pointer', fontSize: 15, fontWeight: 600,
+              fontFamily: "'Space Grotesk',sans-serif", color: textPrimary,
+              background: inputBg, border: `1px solid ${border}`,
+              transition: 'all 0.18s',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = dark ? 'rgba(139,124,255,0.16)' : 'rgba(83,74,183,0.1)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = dark ? '#8B7CFF' : '#5548D9';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = inputBg;
+              (e.currentTarget as HTMLButtonElement).style.borderColor = border;
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <div style={{
+            marginTop: 24, padding: '16px 20px', borderRadius: 12,
+            background: inputBg, border: `1px solid ${border}`,
+          }}>
+            <div style={{
+              fontSize: 11, color: textMuted, fontFamily: "'Inter',sans-serif",
+              lineHeight: 1.65, textAlign: 'center',
+            }}>
+              Your data is stored privately per account.<br />
+              Invite your team after signing in.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

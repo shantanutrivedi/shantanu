@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import { loadState, saveState } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { loadProfile, getInitials } from '@/lib/userProfile';
 import type { Project } from '@/lib/types';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Home' },
   { href: '/workbench', label: 'Workbench' },
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/activity', label: 'Activity' },
@@ -30,15 +31,30 @@ function ShantanuMark({ size = 34 }: { size?: number }) {
 export default function Nav() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
+  const { data: session } = useSession();
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState('viasat');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [addingProject, setAddingProject] = useState(false);
   const [newName, setNewName] = useState('');
+  const [userInitials, setUserInitials] = useState('ST');
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const newNameRef = useRef<HTMLInputElement>(null);
 
   const dark = theme === 'dark';
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      const profile = loadProfile(session.user.id);
+      if (profile) {
+        setUserInitials(profile.initials);
+      } else if (session.user.name) {
+        setUserInitials(getInitials(session.user.name));
+      }
+      if (session.user.image) setUserAvatar(session.user.image);
+    }
+  }, [session?.user?.id, session?.user?.name, session?.user?.image]);
 
   useEffect(() => {
     const sync = () => {
@@ -210,27 +226,50 @@ export default function Nav() {
           <button onClick={() => { setAvatarOpen(!avatarOpen); setPickerOpen(false); }}
             style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center',
               justifyContent: 'center', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
-              background: 'linear-gradient(135deg,#534AB7,#7F77DD)', color: '#EEEDFE',
-              fontFamily: "'Space Grotesk',sans-serif",
+              background: userAvatar ? 'transparent' : 'linear-gradient(135deg,#534AB7,#7F77DD)',
+              color: '#EEEDFE', fontFamily: "'Space Grotesk',sans-serif", overflow: 'hidden',
               boxShadow: dark ? '0 0 18px rgba(139,124,255,0.5)' : '0 2px 8px rgba(83,74,183,0.3)' }}>
-            ST
+            {userAvatar
+              ? <img src={userAvatar} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }} />
+              : userInitials}
           </button>
 
           {avatarOpen && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 200,
+            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 210,
               borderRadius: 14, padding: '6px 0', zIndex: 60, background: dropdownBg,
               border: `1px solid ${dropdownBorder}`, boxShadow: '0 16px 40px rgba(0,0,0,0.25)' }}>
+
+              {/* User info */}
+              {session?.user && (
+                <>
+                  <div style={{ padding: '10px 16px 8px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: dropdownText, fontFamily: "'Space Grotesk',sans-serif" }}>
+                      {session.user.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: dark ? '#7B7796' : '#7B7796', fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>
+                      {session.user.email}
+                    </div>
+                  </div>
+                  <div style={{ height: 1, margin: '4px 0', background: dropdownBorder }} />
+                </>
+              )}
 
               {/* Theme toggle */}
               <button onClick={() => { toggle(); setAvatarOpen(false); }}
                 style={{ width: '100%', textAlign: 'left', padding: '10px 16px', cursor: 'pointer',
                   background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 10,
                   color: dropdownText, fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
-                <span style={{ fontSize: 16 }}>{dark ? '☀️' : '🌙'}</span>
-                Switch to {dark ? 'Light' : 'Dark'} mode
+                <span style={{ fontSize: 15 }}>{dark ? '☀️' : '🌙'}</span>
+                {dark ? 'Light' : 'Dark'} mode
               </button>
 
-              <div style={{ height: 1, margin: '4px 0', background: dropdownBorder }} />
+              {/* Invite */}
+              <Link href="/invite" onClick={() => setAvatarOpen(false)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                  textDecoration: 'none', color: dropdownText, fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
+                <span style={{ fontSize: 15 }}>✉️</span>
+                Invite team
+              </Link>
 
               {/* Settings */}
               <Link href="/settings" onClick={() => setAvatarOpen(false)}
@@ -239,6 +278,17 @@ export default function Nav() {
                 <span style={{ fontSize: 15 }}>⚙️</span>
                 Settings
               </Link>
+
+              <div style={{ height: 1, margin: '4px 0', background: dropdownBorder }} />
+
+              {/* Sign out */}
+              <button onClick={() => signOut({ callbackUrl: '/' })}
+                style={{ width: '100%', textAlign: 'left', padding: '10px 16px', cursor: 'pointer',
+                  background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 10,
+                  color: dark ? '#F0997B' : '#D9614A', fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
+                <span style={{ fontSize: 15 }}>→</span>
+                Sign out
+              </button>
             </div>
           )}
         </div>
