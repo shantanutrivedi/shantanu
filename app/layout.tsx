@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import { ThemeProvider } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: "Shantanu — Program Intelligence",
@@ -9,11 +10,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" style={{ background: '#1C1C24' }}>
+    <html lang="en">
       <head />
-      <body style={{ background: '#1C1C24', color: '#B7B3DC', minHeight: '100vh' }}>
-        <Nav />
-        <main>{children}</main>
+      <body style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--text-body)' }}>
+        <ThemeProvider>
+          <Nav />
+          <main>{children}</main>
+        </ThemeProvider>
       </body>
     </html>
   );

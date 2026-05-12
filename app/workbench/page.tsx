@@ -29,6 +29,7 @@ const TYPE_COLORS: Record<ActionItem['type'], string> = {
 const STATUS_OPTIONS: ActionItem['status'][] = ['Pending', 'In Progress', 'Done', 'Blocked'];
 const PRIORITY_OPTIONS: ActionItem['priority'][] = ['High', 'Medium', 'Low'];
 const TYPE_OPTIONS: ActionItem['type'][] = ['Feature', 'Bug', 'Config', 'Risk', 'Decision', 'Other'];
+const PRODUCT_OPTIONS = ['AI for Work', 'Search AI', 'Agent Platform'];
 
 const TABLE_COLS = [
   { key: 'action', label: 'Action Item', width: 220 },
@@ -152,6 +153,26 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
           </select>
         ) : (
           <PriorityBadge priority={draft as ActionItem['priority']} />
+        )}
+      </td>
+    );
+  }
+
+  if (col === 'product') {
+    return (
+      <td style={cellStyle} onClick={() => setEditing(true)}>
+        {editing ? (
+          <select
+            ref={inputRef as React.RefObject<HTMLSelectElement>}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            style={{ ...inputStyle, cursor: 'pointer' }}
+          >
+            {PRODUCT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <span style={{ color: '#B7B3DC' }}>{draft || '—'}</span>
         )}
       </td>
     );
