@@ -377,6 +377,7 @@ export default function WorkbenchPage() {
     const activeProject = appState.projects.find(p => p.id === appState.activeProjectId);
     const taggedItems = parsedItems.map(item => ({
       ...item,
+      projectId: appState.activeProjectId,
       product: item.product && item.product !== 'General' ? item.product : (activeProject?.name || item.product),
     }));
     const newState: AppState = {

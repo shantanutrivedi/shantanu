@@ -4,6 +4,7 @@ export interface ActionItem {
   assignee: string;
   eta: string;
   product: string;
+  projectId?: string;
   priority: 'High' | 'Medium' | 'Low';
   type: 'Feature' | 'Bug' | 'Config' | 'Risk' | 'Decision' | 'Other';
   status: 'Pending' | 'In Progress' | 'Done' | 'Blocked';

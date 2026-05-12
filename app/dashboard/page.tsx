@@ -560,16 +560,12 @@ export default function DashboardPage() {
 
   const activeProject = state.projects.find(p => p.id === state.activeProjectId);
 
-  // Show all actions — or filter loosely if product field matches project
+  // Filter by projectId stamp (set when saved from workbench); fall back to showing all
   const projectActions = state.actionItems.filter(a => {
     if (!activeProject) return true;
-    // If the action has no product set, show it
-    if (!a.product || a.product === 'General' || a.product === '') return true;
-    const prod = a.product.toLowerCase();
-    const pid = activeProject.id.toLowerCase();
-    const pname = activeProject.name.toLowerCase();
-    return prod.includes(pid) || pid.includes(prod) ||
-           pname.includes(prod) || prod.includes(pname.split('·')[0].trim());
+    if (a.projectId) return a.projectId === activeProject.id;
+    // Legacy items without projectId — show them all
+    return true;
   });
 
   const total = projectActions.length;
