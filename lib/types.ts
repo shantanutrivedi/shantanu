@@ -45,4 +45,5 @@ export interface AppState {
   actionItems: ActionItem[];
   activities: DailyActivity[];
   momUploads: MOMUpload[];
+  selectedModel?: string;
 }

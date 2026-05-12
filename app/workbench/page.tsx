@@ -332,7 +332,7 @@ export default function WorkbenchPage() {
       const res = await fetch('/api/parse-mom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: rawText, filename }),
+        body: JSON.stringify({ text: rawText, filename, model: loadState().selectedModel }),
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.items)) {

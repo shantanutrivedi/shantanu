@@ -20,8 +20,9 @@ Structure your response as a JSON object with these keys:
 Return ONLY valid JSON. No markdown fences, no explanation.`;
 
 export async function POST(req: NextRequest) {
-  const { projectName, goLiveDate, actionItems, activities, weekRange } = await req.json();
+  const { projectName, goLiveDate, actionItems, activities, weekRange, model } = await req.json();
 
+  const selectedModel = model || 'claude-haiku-4-5';
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
         }, null, 2);
 
         const response = await client.messages.create({
-          model: 'claude-haiku-4-5',
+          model: selectedModel,
           max_tokens: 2048,
           system: SYSTEM_PROMPT,
           messages: [

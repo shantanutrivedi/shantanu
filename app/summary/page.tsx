@@ -320,6 +320,7 @@ export default function SummaryPage() {
           actionItems,
           activities,
           weekRange: week.label,
+          model: appState?.selectedModel,
         }),
       });
       const data = await res.json();

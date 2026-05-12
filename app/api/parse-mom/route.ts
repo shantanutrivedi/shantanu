@@ -19,19 +19,20 @@ Extract every actionable item, decision, risk, and dependency mentioned. For eac
 Return ONLY a valid JSON object with a single key "items" containing an array. No markdown, no explanation.`;
 
 export async function POST(req: NextRequest) {
-  const { text, filename } = await req.json();
+  const { text, filename, model } = await req.json();
 
   if (!text || typeof text !== 'string') {
     return Response.json({ error: 'Missing text' }, { status: 400 });
   }
 
+  const selectedModel = model || 'claude-haiku-4-5';
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
         const response = await client.messages.create({
-          model: 'claude-haiku-4-5',
+          model: selectedModel,
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages: [

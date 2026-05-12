@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/activity', label: 'Activity' },
   { href: '/summary', label: 'Summary' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 export default function Nav() {
