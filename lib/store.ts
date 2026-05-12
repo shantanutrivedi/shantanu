@@ -77,7 +77,23 @@ function setKey(key: string, value: string) {
 export function loadState(): AppState {
   const raw = getKey(stateKey());
   if (raw) {
-    try { return JSON.parse(raw); } catch {}
+    try {
+      const state = JSON.parse(raw) as AppState;
+      // Deduplicate by id to fix any double-save accumulation
+      const seenActions = new Set<string>();
+      state.actionItems = (state.actionItems || []).filter(a => {
+        if (seenActions.has(a.id)) return false;
+        seenActions.add(a.id);
+        return true;
+      });
+      const seenActs = new Set<string>();
+      state.activities = (state.activities || []).filter(a => {
+        if (seenActs.has(a.id)) return false;
+        seenActs.add(a.id);
+        return true;
+      });
+      return state;
+    } catch {}
   }
   return {
     projects: DEFAULT_PROJECTS,

@@ -410,9 +410,13 @@ export default function WorkbenchPage() {
       projectId: appState.activeProjectId,
       product: item.product && item.product !== 'General' ? item.product : (activeProject?.name || item.product),
     }));
+    const incomingIds = new Set(taggedItems.map(t => t.id));
     const newState: AppState = {
       ...appState,
-      actionItems: [...appState.actionItems, ...taggedItems],
+      actionItems: [
+        ...appState.actionItems.filter(a => !incomingIds.has(a.id)),
+        ...taggedItems,
+      ],
       momUploads: [upload, ...(appState.momUploads || [])],
     };
     saveState(newState);
