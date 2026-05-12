@@ -2,15 +2,24 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { loadState, saveState } from '@/lib/store';
+import { usePalette } from '@/lib/palette';
 import type { AppState, DailyActivity, Project } from '@/lib/types';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const TYPE_COLORS: Record<DailyActivity['type'], string> = {
+// ── Type color maps ───────────────────────────────────────────────────────────
+const TYPE_COLORS_DARK: Record<DailyActivity['type'], string> = {
   Feature: '#56E0FF',
   Bug:     '#FFB089',
   Config:  '#FFCB5C',
   Meeting: '#8B7CFF',
   Other:   '#B7B3DC',
+};
+
+const TYPE_COLORS_LIGHT: Record<DailyActivity['type'], string> = {
+  Feature: '#007FAA',
+  Bug:     '#D9614A',
+  Config:  '#A06800',
+  Meeting: '#5548D9',
+  Other:   '#7B7796',
 };
 
 const ACTIVITY_TYPES: DailyActivity['type'][] = ['Feature', 'Bug', 'Config', 'Meeting', 'Other'];
@@ -50,7 +59,8 @@ function formatDateGroupLabel(dateStr: string): string {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function TypeBadge({ type }: { type: DailyActivity['type'] }) {
-  const color = TYPE_COLORS[type];
+  const p = usePalette();
+  const color = p.glow ? TYPE_COLORS_DARK[type] : TYPE_COLORS_LIGHT[type];
   return (
     <span style={{
       display: 'inline-flex',
@@ -74,15 +84,16 @@ function TypeBadge({ type }: { type: DailyActivity['type'] }) {
 function StatCard({
   label,
   value,
-  color = '#8B7CFF',
+  color,
 }: {
   label: string;
   value: string | number;
-  color?: string;
+  color: string;
 }) {
+  const p = usePalette();
   return (
     <div style={{
-      background: 'rgba(28,28,36,0.8)',
+      background: p.cardBg,
       border: `1px solid ${color}22`,
       borderRadius: 12,
       padding: '14px 18px',
@@ -95,7 +106,7 @@ function StatCard({
         fontWeight: 600,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
-        color: '#7B7796',
+        color: p.textMuted,
         marginBottom: 6,
       }}>
         {label}
@@ -106,7 +117,7 @@ function StatCard({
         fontSize: 28,
         letterSpacing: '-0.5px',
         color,
-        textShadow: `0 0 18px ${color}60`,
+        textShadow: p.glow ? `0 0 18px ${color}60` : undefined,
         lineHeight: 1,
       }}>
         {value}
@@ -118,6 +129,7 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ActivityPage() {
+  const p = usePalette();
   const [appState, setAppState] = useState<AppState | null>(null);
 
   // Form fields
@@ -135,20 +147,20 @@ export default function ActivityPage() {
   useEffect(() => {
     const state = loadState();
     setAppState(state);
-    const active = state.projects.find((p: Project) => p.id === state.activeProjectId);
+    const active = state.projects.find((pr: Project) => pr.id === state.activeProjectId);
     if (active) setProductInput(active.name);
 
     function onProjectChange() {
       const s = loadState();
       setAppState(s);
-      const p = s.projects.find((pr: Project) => pr.id === s.activeProjectId);
-      if (p) setProductInput(p.name);
+      const pr = s.projects.find((proj: Project) => proj.id === s.activeProjectId);
+      if (pr) setProductInput(pr.name);
     }
     window.addEventListener('shantanu-project-change', onProjectChange);
     return () => window.removeEventListener('shantanu-project-change', onProjectChange);
   }, []);
 
-  const activeProject = appState?.projects.find((p: Project) => p.id === appState.activeProjectId);
+  const activeProject = appState?.projects.find((pr: Project) => pr.id === appState.activeProjectId);
 
   const projectActivities: DailyActivity[] = (appState?.activities ?? [])
     .filter((a: DailyActivity) => a.projectId === appState?.activeProjectId)
@@ -216,11 +228,11 @@ export default function ActivityPage() {
   // ── Styles ──────────────────────────────────────────────────────────────────
 
   const inputBase: React.CSSProperties = {
-    background: 'rgba(139,124,255,0.06)',
-    border: '1px solid rgba(139,124,255,0.18)',
+    background: p.inputBg,
+    border: `1px solid ${p.border}`,
     borderRadius: 8,
     padding: '8px 12px',
-    color: '#EEEDFE',
+    color: p.textPrimary,
     width: '100%',
     fontFamily: "'Inter',sans-serif",
     fontSize: 14,
@@ -240,29 +252,31 @@ export default function ActivityPage() {
     fontWeight: 600,
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
-    color: '#7B7796',
+    color: p.textMuted,
     marginBottom: 6,
   };
 
   const errMsgStyle: React.CSSProperties = {
     fontFamily: "'JetBrains Mono',monospace",
     fontSize: 10,
-    color: '#F0997B',
+    color: p.coral,
     marginTop: 4,
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: '#1C1C24', minHeight: '100vh', color: '#EEEDFE', position: 'relative' }}>
+    <div style={{ background: p.pageBg, minHeight: '100vh', color: p.textPrimary, position: 'relative' }}>
       {/* Ambient glow */}
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        pointerEvents: 'none',
-        zIndex: 0,
-        background: 'radial-gradient(ellipse at 10% 0%, rgba(139,124,255,0.22), transparent 50%), radial-gradient(ellipse at 90% 80%, rgba(240,153,123,0.1), transparent 45%)',
-      }} />
+      {p.glow && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
+          background: 'radial-gradient(ellipse at 10% 0%, rgba(139,124,255,0.22), transparent 50%), radial-gradient(ellipse at 90% 80%, rgba(240,153,123,0.1), transparent 45%)',
+        }} />
+      )}
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 920, margin: '0 auto', padding: '36px 32px 80px' }}>
 
@@ -274,7 +288,7 @@ export default function ActivityPage() {
             fontWeight: 600,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            color: '#8B7CFF',
+            color: p.violet,
             marginBottom: 8,
           }}>
             {activeProject ? activeProject.name : 'Project'} · Daily Log
@@ -284,12 +298,13 @@ export default function ActivityPage() {
             fontWeight: 700,
             fontSize: 32,
             letterSpacing: '-0.8px',
-            color: '#EEEDFE',
+            color: p.textPrimary,
             margin: 0,
+            textShadow: p.glow ? p.glowStr(p.violet, 24) : undefined,
           }}>
             Activity Log
           </h1>
-          <p style={{ fontSize: 14, color: '#7B7796', marginTop: 6, fontFamily: "'Inter',sans-serif" }}>
+          <p style={{ fontSize: 14, color: p.textMuted, marginTop: 6, fontFamily: "'Inter',sans-serif" }}>
             Record what the team shipped, fixed, and discussed each day.
           </p>
         </div>
@@ -299,8 +314,8 @@ export default function ActivityPage() {
           onSubmit={handleSubmit}
           noValidate
           style={{
-            background: 'rgba(28,28,36,0.8)',
-            border: '1px solid rgba(139,124,255,0.18)',
+            background: p.cardBg,
+            border: `1px solid ${p.border}`,
             borderRadius: 16,
             padding: 28,
             marginBottom: 32,
@@ -311,7 +326,7 @@ export default function ActivityPage() {
             fontFamily: "'Space Grotesk',sans-serif",
             fontWeight: 600,
             fontSize: 15,
-            color: '#EEEDFE',
+            color: p.textPrimary,
             marginBottom: 22,
             display: 'flex',
             alignItems: 'center',
@@ -321,8 +336,8 @@ export default function ActivityPage() {
               width: 6,
               height: 6,
               borderRadius: 3,
-              background: '#8B7CFF',
-              boxShadow: '0 0 9px #8B7CFF',
+              background: p.violet,
+              boxShadow: p.glow ? p.glowStr(p.violet, 9) : 'none',
               display: 'inline-block',
             }} />
             Log an Activity
@@ -337,7 +352,7 @@ export default function ActivityPage() {
                 value={date}
                 onChange={e => setDate(e.target.value)}
                 required
-                style={{ ...inputBase, colorScheme: 'dark', ...(fieldErrors.date ? errorInputStyle : {}) }}
+                style={{ ...inputBase, colorScheme: p.glow ? 'dark' : 'light', ...(fieldErrors.date ? errorInputStyle : {}) }}
               />
               {fieldErrors.date && <div style={errMsgStyle}>{fieldErrors.date}</div>}
             </div>
@@ -397,7 +412,7 @@ export default function ActivityPage() {
                 style={{ ...inputBase, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
               >
                 {ACTIVITY_TYPES.map(t => (
-                  <option key={t} value={t} style={{ background: '#1C1C24' }}>{t}</option>
+                  <option key={t} value={t} style={{ background: p.cardSolid, color: p.textPrimary }}>{t}</option>
                 ))}
               </select>
             </div>
@@ -413,8 +428,8 @@ export default function ActivityPage() {
                 list="project-datalist"
               />
               <datalist id="project-datalist">
-                {(appState?.projects ?? []).map((p: Project) => (
-                  <option key={p.id} value={p.name} />
+                {(appState?.projects ?? []).map((pr: Project) => (
+                  <option key={pr.id} value={pr.name} />
                 ))}
               </datalist>
             </div>
@@ -435,7 +450,7 @@ export default function ActivityPage() {
                 fontWeight: 700,
                 fontSize: 14,
                 cursor: submitting ? 'not-allowed' : 'pointer',
-                boxShadow: '0 0 22px rgba(83,74,183,0.5)',
+                boxShadow: p.glow ? '0 0 22px rgba(83,74,183,0.5)' : 'none',
                 opacity: submitting ? 0.7 : 1,
                 transition: 'opacity 0.2s, box-shadow 0.2s',
                 letterSpacing: '-0.2px',
@@ -448,7 +463,7 @@ export default function ActivityPage() {
               <span style={{
                 fontFamily: "'JetBrains Mono',monospace",
                 fontSize: 12,
-                color: '#B6FF6E',
+                color: p.lime,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
@@ -457,8 +472,8 @@ export default function ActivityPage() {
                   width: 6,
                   height: 6,
                   borderRadius: 3,
-                  background: '#B6FF6E',
-                  boxShadow: '0 0 8px #B6FF6E',
+                  background: p.lime,
+                  boxShadow: p.glow ? p.glowStr(p.lime, 8) : 'none',
                   display: 'inline-block',
                 }} />
                 Saved to activity log
@@ -469,10 +484,10 @@ export default function ActivityPage() {
 
         {/* ── Stats row ─────────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 28 }}>
-          <StatCard label="Entries this week" value={weekActivities.length} color="#8B7CFF" />
-          <StatCard label="Bugs logged"       value={weekBugs}             color={weekBugs > 0 ? '#FFB089' : '#7B7796'} />
-          <StatCard label="Features"          value={weekFeatures}         color={weekFeatures > 0 ? '#56E0FF' : '#7B7796'} />
-          <StatCard label="Hours this week"   value={`${weekHours % 1 === 0 ? weekHours : weekHours.toFixed(1)}h`} color="#B6FF6E" />
+          <StatCard label="Entries this week" value={weekActivities.length} color={p.violet} />
+          <StatCard label="Bugs logged"       value={weekBugs}             color={weekBugs > 0 ? p.coral : p.textMuted} />
+          <StatCard label="Features"          value={weekFeatures}         color={weekFeatures > 0 ? p.cyan : p.textMuted} />
+          <StatCard label="Hours this week"   value={`${weekHours % 1 === 0 ? weekHours : weekHours.toFixed(1)}h`} color={p.lime} />
         </div>
 
         {/* ── Activity log ──────────────────────────────────────────────────── */}
@@ -481,7 +496,7 @@ export default function ActivityPage() {
             fontFamily: "'Space Grotesk',sans-serif",
             fontWeight: 600,
             fontSize: 15,
-            color: '#EEEDFE',
+            color: p.textPrimary,
             marginBottom: 16,
             display: 'flex',
             alignItems: 'center',
@@ -489,12 +504,12 @@ export default function ActivityPage() {
           }}>
             Log
             <span style={{
-              background: 'rgba(139,124,255,0.15)',
+              background: p.inputBg,
               borderRadius: 100,
               padding: '2px 10px',
               fontSize: 12,
               fontFamily: "'JetBrains Mono',monospace",
-              color: '#8B7CFF',
+              color: p.violet,
             }}>
               {projectActivities.length}
             </span>
@@ -502,16 +517,16 @@ export default function ActivityPage() {
 
           {sortedDates.length === 0 && (
             <div style={{
-              background: 'rgba(28,28,36,0.6)',
-              border: '1px solid rgba(139,124,255,0.1)',
+              background: p.cardBg,
+              border: `1px solid ${p.borderTint}`,
               borderRadius: 12,
               padding: '36px 24px',
               textAlign: 'center',
-              color: '#7B7796',
+              color: p.textMuted,
               fontSize: 14,
               fontFamily: "'Inter',sans-serif",
             }}>
-              No activities logged yet. Use the form above to record today's work.
+              No activities logged yet. Use the form above to record today&apos;s work.
             </div>
           )}
 
@@ -524,15 +539,15 @@ export default function ActivityPage() {
                 fontWeight: 600,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: '#7B7796',
+                color: p.textMuted,
                 marginBottom: 8,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
               }}>
                 {formatDateGroupLabel(d)}
-                <div style={{ flex: 1, height: 1, background: 'rgba(139,124,255,0.1)' }} />
-                <span style={{ color: '#534AB7', fontSize: 10 }}>
+                <div style={{ flex: 1, height: 1, background: p.borderTint }} />
+                <span style={{ color: p.midViolet, fontSize: 10 }}>
                   {grouped[d].reduce((s, a) => s + a.hours, 0).toFixed(1)}h
                 </span>
               </div>
@@ -541,11 +556,11 @@ export default function ActivityPage() {
                 <div
                   key={entry.id}
                   style={{
-                    border: '1px solid rgba(139,124,255,0.1)',
+                    border: `1px solid ${p.borderTint}`,
                     borderRadius: 10,
                     padding: '12px 16px',
                     marginBottom: 8,
-                    background: 'rgba(28,28,36,0.5)',
+                    background: p.cardBg,
                     display: 'grid',
                     gridTemplateColumns: 'auto 1fr auto',
                     gap: 14,
@@ -554,13 +569,13 @@ export default function ActivityPage() {
                   }}
                   onMouseEnter={e => {
                     const el = e.currentTarget as HTMLDivElement;
-                    el.style.background = 'rgba(139,124,255,0.06)';
-                    el.style.borderColor = 'rgba(139,124,255,0.22)';
+                    el.style.background = p.inputBg;
+                    el.style.borderColor = p.border;
                   }}
                   onMouseLeave={e => {
                     const el = e.currentTarget as HTMLDivElement;
-                    el.style.background = 'rgba(28,28,36,0.5)';
-                    el.style.borderColor = 'rgba(139,124,255,0.1)';
+                    el.style.background = p.cardBg;
+                    el.style.borderColor = p.borderTint;
                   }}
                 >
                   <TypeBadge type={entry.type} />
@@ -569,7 +584,7 @@ export default function ActivityPage() {
                     <div style={{
                       fontFamily: "'Inter',sans-serif",
                       fontSize: 14,
-                      color: '#EEEDFE',
+                      color: p.textPrimary,
                       lineHeight: 1.45,
                       marginBottom: 3,
                     }}>
@@ -578,7 +593,7 @@ export default function ActivityPage() {
                     <div style={{
                       fontFamily: "'JetBrains Mono',monospace",
                       fontSize: 11,
-                      color: '#7B7796',
+                      color: p.textMuted,
                     }}>
                       {entry.team}
                     </div>
@@ -588,7 +603,7 @@ export default function ActivityPage() {
                     fontFamily: "'JetBrains Mono',monospace",
                     fontSize: 13,
                     fontWeight: 600,
-                    color: '#B7B3DC',
+                    color: p.textBody,
                     whiteSpace: 'nowrap',
                     textAlign: 'right',
                   }}>
@@ -603,14 +618,14 @@ export default function ActivityPage() {
 
       <style>{`
         input[type="date"]::-webkit-calendar-picker-indicator {
-          filter: invert(0.45) sepia(1) hue-rotate(230deg);
+          filter: ${p.glow ? 'invert(0.45) sepia(1) hue-rotate(230deg)' : 'none'};
           cursor: pointer;
         }
-        select option { background: #1C1C24; color: #EEEDFE; }
-        input::placeholder, textarea::placeholder { color: #3D3D52; }
+        select option { background: ${p.cardSolid}; color: ${p.textPrimary}; }
+        input::placeholder, textarea::placeholder { color: ${p.textMuted}; opacity: 0.6; }
         input:focus, textarea:focus, select:focus {
-          border-color: rgba(139,124,255,0.45) !important;
-          box-shadow: 0 0 0 3px rgba(139,124,255,0.1);
+          border-color: ${p.border} !important;
+          box-shadow: 0 0 0 3px ${p.inputBg};
         }
       `}</style>
     </div>

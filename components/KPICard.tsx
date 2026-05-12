@@ -1,20 +1,21 @@
+'use client';
+import { usePalette } from '@/lib/palette';
+
 interface KPICardProps {
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
-  glow?: boolean;
 }
 
-export default function KPICard({ label, value, sub, color = '#8B7CFF', glow = true }: KPICardProps) {
+export default function KPICard({ label, value, sub, color }: KPICardProps) {
+  const p = usePalette();
+  const c = color || p.violet;
   return (
-    <div className="rounded-xl p-4 flex flex-col gap-1"
-      style={{ background: 'rgba(139,124,255,0.06)', border: '1px solid rgba(139,124,255,0.15)' }}>
-      <div className="text-xs uppercase tracking-widest" style={{ color: '#7B7796', fontFamily: "'JetBrains Mono',monospace" }}>{label}</div>
-      <div className="text-3xl font-bold" style={{ color, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-1px', textShadow: glow ? `0 0 20px ${color}` : undefined }}>
-        {value}
-      </div>
-      {sub && <div className="text-xs" style={{ color: '#7B7796' }}>{sub}</div>}
+    <div style={{ background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 14, padding: '18px 20px' }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 34, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '-1px', color: c, textShadow: p.glow ? `0 0 20px ${c}` : 'none' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: p.textMuted, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { loadState, saveState } from '@/lib/store';
+import { usePalette } from '@/lib/palette';
 import type { ActionItem, MOMUpload, AppState } from '@/lib/types';
 
 const STATUS_COLORS: Record<ActionItem['status'], string> = {
@@ -91,6 +92,7 @@ interface EditableCellProps {
 }
 
 function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
+  const p = usePalette();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
@@ -108,13 +110,13 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
 
   const cellStyle: React.CSSProperties = {
     padding: '6px 10px', fontSize: 11, fontFamily: "'JetBrains Mono',monospace",
-    color: '#EEEDFE', verticalAlign: 'middle', whiteSpace: 'nowrap',
+    color: p.textPrimary, verticalAlign: 'middle', whiteSpace: 'nowrap',
     cursor: 'pointer', minWidth: 60,
   };
 
   const inputStyle: React.CSSProperties = {
-    background: 'rgba(139,124,255,0.1)', border: '1px solid rgba(139,124,255,0.4)',
-    borderRadius: 6, color: '#EEEDFE', fontFamily: "'JetBrains Mono',monospace",
+    background: p.inputBg, border: `1px solid ${p.border}`,
+    borderRadius: 6, color: p.textPrimary, fontFamily: "'JetBrains Mono',monospace",
     fontSize: 11, padding: '2px 6px', outline: 'none', width: '100%', boxSizing: 'border-box',
   };
 
@@ -172,7 +174,7 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
             {PRODUCT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         ) : (
-          <span style={{ color: '#B7B3DC' }}>{draft || '—'}</span>
+          <span style={{ color: p.textBody }}>{draft || '—'}</span>
         )}
       </td>
     );
@@ -213,11 +215,11 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
           />
         ) : draft ? (
           <a href={draft} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-            style={{ color: '#8B7CFF', textDecoration: 'underline', fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>
+            style={{ color: p.violet, textDecoration: 'underline', fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>
             {draft.replace(/^https?:\/\//, '').slice(0, 24)}{draft.length > 30 ? '…' : ''}
           </a>
         ) : (
-          <span style={{ color: '#7B7796', fontSize: 10 }}>+ add</span>
+          <span style={{ color: p.textMuted, fontSize: 10 }}>+ add</span>
         )}
       </td>
     );
@@ -235,8 +237,8 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
           style={inputStyle}
         />
       ) : (
-        <span style={{ color: col === 'action' ? '#EEEDFE' : '#B7B3DC' }}>
-          {draft || <span style={{ color: '#7B7796', fontSize: 10 }}>—</span>}
+        <span style={{ color: col === 'action' ? p.textPrimary : p.textBody }}>
+          {draft || <span style={{ color: p.textMuted, fontSize: 10 }}>—</span>}
         </span>
       )}
     </td>
@@ -249,15 +251,16 @@ interface ActionTableProps {
 }
 
 function ActionTable({ items, onEdit }: ActionTableProps) {
+  const p = usePalette();
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 14, border: '1px solid rgba(139,124,255,0.18)' }}>
+    <div style={{ overflowX: 'auto', borderRadius: 14, border: `1px solid ${p.border}` }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
         <thead>
-          <tr style={{ background: 'rgba(139,124,255,0.06)', borderBottom: '1px solid rgba(139,124,255,0.15)' }}>
+          <tr style={{ background: p.inputBg, borderBottom: `1px solid ${p.borderTint}` }}>
             {TABLE_COLS.map(col => (
               <th key={col.key} style={{
                 padding: '10px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600,
-                letterSpacing: '0.07em', textTransform: 'uppercase', color: '#7B7796',
+                letterSpacing: '0.07em', textTransform: 'uppercase', color: p.textMuted,
                 fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap',
                 minWidth: col.width,
               }}>
@@ -269,12 +272,12 @@ function ActionTable({ items, onEdit }: ActionTableProps) {
         <tbody>
           {items.map((item, i) => (
             <tr key={item.id} style={{
-              borderBottom: '1px solid rgba(139,124,255,0.08)',
-              background: i % 2 === 0 ? 'transparent' : 'rgba(139,124,255,0.02)',
+              borderBottom: `1px solid ${p.borderTint}`,
+              background: i % 2 === 0 ? 'transparent' : p.rowBg,
               transition: 'background 0.15s',
             }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,124,255,0.07)')}
-              onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(139,124,255,0.02)')}
+              onMouseEnter={e => (e.currentTarget.style.background = p.inputBg)}
+              onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : p.rowBg)}
             >
               {TABLE_COLS.map(col => (
                 <EditableCell
@@ -294,6 +297,7 @@ function ActionTable({ items, onEdit }: ActionTableProps) {
 }
 
 export default function WorkbenchPage() {
+  const p = usePalette();
   const [appState, setAppState] = useState<AppState | null>(null);
   const [rawText, setRawText] = useState('');
   const [filename, setFilename] = useState('');
@@ -395,7 +399,7 @@ export default function WorkbenchPage() {
       rawText,
       parsedItems,
     };
-    const activeProject = appState.projects.find(p => p.id === appState.activeProjectId);
+    const activeProject = appState.projects.find(proj => proj.id === appState.activeProjectId);
     const taggedItems = parsedItems.map(item => ({
       ...item,
       projectId: appState.activeProjectId,
@@ -414,23 +418,23 @@ export default function WorkbenchPage() {
   const recentUploads = appState?.momUploads?.slice(0, 6) ?? [];
 
   const cardStyle: React.CSSProperties = {
-    background: 'rgba(28,28,36,0.8)',
-    border: '1px solid rgba(139,124,255,0.18)',
+    background: p.cardBg,
+    border: `1px solid ${p.border}`,
     borderRadius: 16,
     padding: 24,
   };
 
   const dropzoneStyle: React.CSSProperties = {
     border: dragging
-      ? '2px dashed rgba(139,124,255,0.7)'
-      : '2px dashed rgba(139,124,255,0.3)',
+      ? `2px dashed ${p.violet}`
+      : `2px dashed ${p.borderTint}`,
     borderRadius: 14,
     padding: '36px 24px',
     textAlign: 'center',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    background: dragging ? 'rgba(139,124,255,0.07)' : 'rgba(139,124,255,0.02)',
-    boxShadow: dragging ? '0 0 28px rgba(139,124,255,0.18)' : 'none',
+    background: dragging ? p.inputBg : 'transparent',
+    boxShadow: dragging && p.glow ? p.glowStr(p.violet, 28) : 'none',
     marginBottom: rawText ? 20 : 0,
   };
 
@@ -438,23 +442,25 @@ export default function WorkbenchPage() {
     display: 'inline-flex', alignItems: 'center', gap: 8,
     padding: '10px 22px', borderRadius: 10, fontWeight: 600, fontSize: 14,
     color: '#EEEDFE', background: 'linear-gradient(135deg,#534AB7,#7F77DD)',
-    boxShadow: '0 0 20px rgba(83,74,183,0.45)', border: 'none', cursor: 'pointer',
+    boxShadow: p.glow ? '0 0 20px rgba(83,74,183,0.45)' : 'none',
+    border: 'none', cursor: 'pointer',
     fontFamily: "'Space Grotesk',sans-serif", transition: 'all 0.2s',
   };
 
   return (
-    <div style={{ background: '#1C1C24', minHeight: '100vh', padding: '32px 40px', color: '#EEEDFE' }}>
+    <div style={{ background: p.pageBg, minHeight: '100vh', padding: '32px 40px', color: p.textPrimary }}>
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{
           fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 32,
-          letterSpacing: '-1px', color: '#EEEDFE', margin: 0, marginBottom: 6,
+          letterSpacing: '-1px', color: p.textPrimary, margin: 0, marginBottom: 6,
+          textShadow: p.glow ? p.glowStr(p.violet, 24) : undefined,
         }}>
           Workbench
-          <span style={{ marginLeft: 12, display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: '#B6FF6E', boxShadow: '0 0 10px #B6FF6E', verticalAlign: 'middle' }} />
+          <span style={{ marginLeft: 12, display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: p.lime, boxShadow: p.glow ? p.glowStr(p.lime, 10) : 'none', verticalAlign: 'middle' }} />
         </h1>
-        <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, color: '#7B7796', margin: 0 }}>
+        <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, color: p.textMuted, margin: 0 }}>
           Upload a meeting notes file, parse it with AI, and turn actions into a live tracker.
         </p>
       </div>
@@ -464,8 +470,8 @@ export default function WorkbenchPage() {
 
         {/* Drop Zone */}
         <div style={cardStyle}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: '#EEEDFE', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 3, background: '#8B7CFF', boxShadow: '0 0 8px #8B7CFF', display: 'inline-block' }} />
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: p.violet, boxShadow: p.glow ? p.glowStr(p.violet, 8) : 'none', display: 'inline-block' }} />
             Upload MOM File
           </div>
 
@@ -477,10 +483,10 @@ export default function WorkbenchPage() {
             onClick={() => fileRef.current?.click()}
           >
             <div style={{ fontSize: 32, marginBottom: 10 }}>📄</div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: dragging ? '#8B7CFF' : '#EEEDFE', marginBottom: 6 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: dragging ? p.violet : p.textPrimary, marginBottom: 6 }}>
               {dragging ? 'Drop to upload' : 'Drag & drop a .txt file'}
             </div>
-            <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 12, color: '#7B7796' }}>
+            <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 12, color: p.textMuted }}>
               or click to browse — .txt files only
             </div>
           </div>
@@ -497,7 +503,7 @@ export default function WorkbenchPage() {
             <div style={{
               marginTop: 12, padding: '10px 14px', borderRadius: 10,
               background: 'rgba(240,153,123,0.12)', border: '1px solid rgba(240,153,123,0.3)',
-              color: '#F0997B', fontFamily: "'JetBrains Mono',monospace", fontSize: 12,
+              color: p.coral, fontFamily: "'JetBrains Mono',monospace", fontSize: 12,
             }}>
               {parseError}
             </div>
@@ -507,10 +513,10 @@ export default function WorkbenchPage() {
             <div style={{ marginTop: rawText ? 20 : 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: '#F0997B' }}>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: p.coral }}>
                     {filename}
                   </span>
-                  <span style={{ fontSize: 10, color: '#7B7796', fontFamily: "'JetBrains Mono',monospace" }}>
+                  <span style={{ fontSize: 10, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>
                     {rawText.length.toLocaleString()} chars
                   </span>
                 </div>
@@ -540,8 +546,8 @@ export default function WorkbenchPage() {
 
               <div style={{
                 maxHeight: 220, overflowY: 'auto', padding: '14px 16px', borderRadius: 10,
-                background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(139,124,255,0.12)',
-                fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: '#7B7796',
+                background: p.cardBg, border: `1px solid ${p.borderTint}`,
+                fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: p.textBody,
                 lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               }}>
                 {rawText}
@@ -564,15 +570,15 @@ export default function WorkbenchPage() {
 
         {/* Recent Uploads */}
         <div style={cardStyle}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: '#EEEDFE', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 3, background: '#F0997B', boxShadow: '0 0 8px #F0997B', display: 'inline-block' }} />
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: p.coral, boxShadow: p.glow ? p.glowStr(p.coral, 8) : 'none', display: 'inline-block' }} />
             Recent Uploads
           </div>
 
           {recentUploads.length === 0 ? (
             <div style={{
               textAlign: 'center', padding: '32px 16px',
-              fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#7B7796',
+              fontFamily: "'Inter',sans-serif", fontSize: 13, color: p.textMuted,
             }}>
               <div style={{ fontSize: 24, marginBottom: 8 }}>📂</div>
               No uploads yet. Parse a MOM file to get started.
@@ -586,16 +592,16 @@ export default function WorkbenchPage() {
                 return (
                   <div key={upload.id} style={{
                     padding: '12px 14px', borderRadius: 10,
-                    background: 'rgba(139,124,255,0.05)', border: '1px solid rgba(139,124,255,0.12)',
+                    background: p.rowBg, border: `1px solid ${p.borderTint}`,
                     cursor: 'pointer', transition: 'all 0.15s',
                   }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(139,124,255,0.1)';
-                      (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(139,124,255,0.25)';
+                      (e.currentTarget as HTMLDivElement).style.background = p.inputBg;
+                      (e.currentTarget as HTMLDivElement).style.borderColor = p.border;
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(139,124,255,0.05)';
-                      (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(139,124,255,0.12)';
+                      (e.currentTarget as HTMLDivElement).style.background = p.rowBg;
+                      (e.currentTarget as HTMLDivElement).style.borderColor = p.borderTint;
                     }}
                     onClick={() => {
                       setFilename(upload.filename);
@@ -607,17 +613,17 @@ export default function WorkbenchPage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: '#F0997B', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: p.coral, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {upload.filename}
                         </div>
-                        <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#7B7796' }}>
+                        <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 11, color: p.textMuted }}>
                           {upload.parsedItems.length} action{upload.parsedItems.length !== 1 ? 's' : ''} · {dateStr} {timeStr}
                         </div>
                       </div>
                       <span style={{
                         flexShrink: 0, padding: '2px 7px', borderRadius: 6, fontSize: 10,
                         fontFamily: "'JetBrains Mono',monospace",
-                        background: 'rgba(139,124,255,0.15)', color: '#8B7CFF',
+                        background: p.inputBg, color: p.violet,
                       }}>
                         {upload.projectId}
                       </span>
@@ -637,11 +643,11 @@ export default function WorkbenchPage() {
             <div>
               <h2 style={{
                 fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22,
-                letterSpacing: '-0.5px', color: '#EEEDFE', margin: 0, marginBottom: 4,
+                letterSpacing: '-0.5px', color: p.textPrimary, margin: 0, marginBottom: 4,
               }}>
                 {parsedItems.length} action{parsedItems.length !== 1 ? 's' : ''} extracted
               </h2>
-              <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#7B7796', margin: 0 }}>
+              <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: p.textMuted, margin: 0 }}>
                 Click any cell to edit inline. Save when ready.
               </p>
             </div>
@@ -649,10 +655,10 @@ export default function WorkbenchPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {saved && (
                 <span style={{
-                  fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: '#B6FF6E',
+                  fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: p.lime,
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 3, background: '#B6FF6E', boxShadow: '0 0 6px #B6FF6E', display: 'inline-block' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: 3, background: p.lime, boxShadow: p.glow ? p.glowStr(p.lime, 6) : 'none', display: 'inline-block' }} />
                   Saved to dashboard
                 </span>
               )}
@@ -661,11 +667,13 @@ export default function WorkbenchPage() {
                 style={{
                   ...primaryBtnStyle,
                   background: saved
-                    ? 'linear-gradient(135deg,rgba(182,255,110,0.2),rgba(182,255,110,0.15))'
+                    ? `linear-gradient(135deg,${p.lime}33,${p.lime}22)`
                     : 'linear-gradient(135deg,#534AB7,#7F77DD)',
-                  boxShadow: saved ? '0 0 20px rgba(182,255,110,0.2)' : '0 0 20px rgba(83,74,183,0.45)',
-                  color: saved ? '#B6FF6E' : '#EEEDFE',
-                  border: saved ? '1px solid rgba(182,255,110,0.3)' : 'none',
+                  boxShadow: saved
+                    ? (p.glow ? p.glowStr(p.lime, 20) : 'none')
+                    : (p.glow ? '0 0 20px rgba(83,74,183,0.45)' : 'none'),
+                  color: saved ? p.lime : '#EEEDFE',
+                  border: saved ? `1px solid ${p.lime}4D` : 'none',
                 }}
               >
                 {saved ? '✓ Actions saved' : '↓ Save actions'}
@@ -674,15 +682,15 @@ export default function WorkbenchPage() {
           </div>
 
           <div style={{
-            background: 'rgba(28,28,36,0.8)',
-            border: '1px solid rgba(139,124,255,0.18)',
+            background: p.cardBg,
+            border: `1px solid ${p.border}`,
             borderRadius: 16,
             overflow: 'hidden',
           }}>
             <ActionTable items={parsedItems} onEdit={handleEditItem} />
           </div>
 
-          <div style={{ marginTop: 12, fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: '#7B7796', textAlign: 'right' }}>
+          <div style={{ marginTop: 12, fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: p.textMuted, textAlign: 'right' }}>
             {parsedItems.length} rows · {TABLE_COLS.length} columns · click cell to edit
           </div>
         </div>
@@ -693,8 +701,8 @@ export default function WorkbenchPage() {
           to { transform: rotate(360deg); }
         }
         select option {
-          background: #1C1C24;
-          color: #EEEDFE;
+          background: ${p.cardSolid};
+          color: ${p.textPrimary};
         }
       `}</style>
     </div>

@@ -6,17 +6,14 @@ import type { AppState, Project, ActionItem } from '@/lib/types';
 import KPICard from '@/components/KPICard';
 import StatusPill from '@/components/StatusPill';
 import PriorityBadge from '@/components/PriorityBadge';
+import { usePalette } from '@/lib/palette';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-const V = '#8B7CFF';
-const CORAL = '#F0997B';
-const LIME = '#B6FF6E';
-const CYAN = '#56E0FF';
-const PROJECT_COLORS = [V, CYAN, '#FFB089', LIME];
+const PROJECT_COLORS = ['#8B7CFF', '#56E0FF', '#FFB089', '#B6FF6E'];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function healthColor(h: Project['health']) {
-  return h === 'On Track' ? LIME : h === 'At Risk' ? '#FFCB5C' : CORAL;
+  return h === 'On Track' ? '#B6FF6E' : h === 'At Risk' ? '#FFCB5C' : '#F0997B';
 }
 
 function fmtDate(iso: string) {
@@ -35,6 +32,7 @@ function daysFromNow(iso: string): number {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  const p = usePalette();
   return (
     <div style={{ marginBottom: 32 }}>
       <h1 style={{
@@ -42,13 +40,13 @@ function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
         fontWeight: 700,
         fontSize: 34,
         letterSpacing: '-1px',
-        color: '#EEEDFE',
+        color: p.textPrimary,
         margin: 0,
         lineHeight: 1.1,
       }}>
         {title}
       </h1>
-      <p style={{ margin: '6px 0 0', fontSize: 14, color: '#7B7796', fontFamily: "'Inter',sans-serif" }}>
+      <p style={{ margin: '6px 0 0', fontSize: 14, color: p.textMuted, fontFamily: "'Inter',sans-serif" }}>
         {subtitle}
       </p>
     </div>
@@ -56,6 +54,7 @@ function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 function ProjectHealthBanner({ project }: { project: Project | undefined }) {
+  const p = usePalette();
   if (!project) return null;
   const hc = healthColor(project.health);
   const days = daysFromNow(project.goLiveDate);
@@ -69,9 +68,9 @@ function ProjectHealthBanner({ project }: { project: Project | undefined }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      background: 'rgba(28,28,40,0.7)',
+      background: p.cardBg,
       border: `1px solid ${hc}30`,
-      boxShadow: `0 0 32px ${hc}10`,
+      boxShadow: p.glow ? `0 0 32px ${hc}10` : 'none',
       gap: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -80,14 +79,14 @@ function ProjectHealthBanner({ project }: { project: Project | undefined }) {
           height: 10,
           borderRadius: '50%',
           background: hc,
-          boxShadow: `0 0 12px ${hc}`,
+          boxShadow: p.glow ? `0 0 12px ${hc}` : 'none',
           flexShrink: 0,
         }} />
         <div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: '#EEEDFE', letterSpacing: '-0.4px' }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: p.textPrimary, letterSpacing: '-0.4px' }}>
             {project.name}
           </div>
-          <div style={{ fontSize: 12, color: '#7B7796', marginTop: 2, fontFamily: "'Inter',sans-serif" }}>
+          <div style={{ fontSize: 12, color: p.textMuted, marginTop: 2, fontFamily: "'Inter',sans-serif" }}>
             {project.description}
           </div>
         </div>
@@ -95,24 +94,24 @@ function ProjectHealthBanner({ project }: { project: Project | undefined }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexShrink: 0 }}>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: '#7B7796', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             Go-live
           </div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: '#EEEDFE', marginTop: 2 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary, marginTop: 2 }}>
             {fmtDate(project.goLiveDate)}
           </div>
         </div>
 
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: '#7B7796', fontFamily: "'JetBrains Mono',monospace", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             {overdue ? 'Overdue by' : 'Days left'}
           </div>
           <div style={{
             fontFamily: "'Space Grotesk',sans-serif",
             fontWeight: 700,
             fontSize: 22,
-            color: overdue ? CORAL : hc,
-            textShadow: `0 0 14px ${overdue ? CORAL : hc}`,
+            color: overdue ? p.coral : hc,
+            textShadow: p.glow ? `0 0 14px ${overdue ? p.coral : hc}` : 'none',
             marginTop: 2,
           }}>
             {Math.abs(days)}
@@ -139,43 +138,45 @@ function ProjectHealthBanner({ project }: { project: Project | undefined }) {
 }
 
 function KPIGrid({ total, done, blocked, pct }: { total: number; done: number; blocked: number; pct: number }) {
+  const p = usePalette();
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 28 }}>
-      <KPICard label="Total Actions" value={total} sub="across active project" color={V} />
-      <KPICard label="Done" value={done} sub={`${total > 0 ? Math.round((done / total) * 100) : 0}% complete`} color={LIME} />
-      <KPICard label="Blocked" value={blocked} sub={blocked > 0 ? 'needs attention' : 'all clear'} color={CORAL} />
-      <KPICard label="On-track %" value={`${pct}%`} sub="done / total" color={pct >= 70 ? LIME : pct >= 40 ? '#FFCB5C' : CORAL} />
+      <KPICard label="Total Actions" value={total} sub="across active project" color={p.violet} />
+      <KPICard label="Done" value={done} sub={`${total > 0 ? Math.round((done / total) * 100) : 0}% complete`} color={p.lime} />
+      <KPICard label="Blocked" value={blocked} sub={blocked > 0 ? 'needs attention' : 'all clear'} color={p.coral} />
+      <KPICard label="On-track %" value={`${pct}%`} sub="done / total" color={pct >= 70 ? p.lime : pct >= 40 ? p.amber : p.coral} />
     </div>
   );
 }
 
 function ActionSummaryTable({ actions }: { actions: ActionItem[] }) {
+  const p = usePalette();
   const [hovered, setHovered] = useState<string | null>(null);
 
   return (
     <div style={{
-      background: 'rgba(28,28,40,0.6)',
-      border: `1px solid rgba(139,124,255,0.15)`,
+      background: p.cardBg,
+      border: `1px solid ${p.border}`,
       borderRadius: 14,
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(139,124,255,0.12)' }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: '#EEEDFE', letterSpacing: '-0.5px' }}>
+      <div style={{ padding: '18px 22px 14px', borderBottom: `1px solid ${p.borderTint}` }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: p.textPrimary, letterSpacing: '-0.5px' }}>
           Action Items
         </div>
-        <div style={{ fontSize: 12, color: '#7B7796', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: p.textMuted, marginTop: 2 }}>
           {actions.length} item{actions.length !== 1 ? 's' : ''} · active project
         </div>
       </div>
 
       {actions.length === 0 ? (
-        <div style={{ padding: '32px 22px', textAlign: 'center', color: '#7B7796', fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
+        <div style={{ padding: '32px 22px', textAlign: 'center', color: p.textMuted, fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
           No actions for this project yet.
         </div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'rgba(139,124,255,0.05)' }}>
+            <tr style={{ background: p.inputBg }}>
               {['Action', 'Owner', 'ETA', 'Priority', 'Status'].map(h => (
                 <th key={h} style={{
                   padding: '8px 14px',
@@ -184,9 +185,9 @@ function ActionSummaryTable({ actions }: { actions: ActionItem[] }) {
                   fontWeight: 600,
                   letterSpacing: '0.07em',
                   textTransform: 'uppercase',
-                  color: '#7B7796',
+                  color: p.textMuted,
                   fontFamily: "'JetBrains Mono',monospace",
-                  borderBottom: '1px solid rgba(139,124,255,0.1)',
+                  borderBottom: `1px solid ${p.borderTint}`,
                 }}>
                   {h}
                 </th>
@@ -200,24 +201,24 @@ function ActionSummaryTable({ actions }: { actions: ActionItem[] }) {
                 onMouseEnter={() => setHovered(a.id)}
                 onMouseLeave={() => setHovered(null)}
                 style={{
-                  borderBottom: i < actions.length - 1 ? '1px solid rgba(139,124,255,0.07)' : 'none',
-                  background: hovered === a.id ? 'rgba(139,124,255,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(139,124,255,0.03)',
+                  borderBottom: i < actions.length - 1 ? `1px solid ${p.rowBg}` : 'none',
+                  background: hovered === a.id ? p.inputBg : i % 2 === 0 ? 'transparent' : p.rowBg,
                   transition: 'background 0.15s',
                   cursor: 'default',
                 }}
               >
-                <td style={{ padding: '9px 14px', fontSize: 12, color: '#EEEDFE', fontFamily: "'Inter',sans-serif", maxWidth: 220 }}>
+                <td style={{ padding: '9px 14px', fontSize: 12, color: p.textPrimary, fontFamily: "'Inter',sans-serif", maxWidth: 220 }}>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.action}</div>
                   {a.comment && (
-                    <div style={{ fontSize: 10, color: '#7B7796', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 10, color: p.textMuted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.comment}
                     </div>
                   )}
                 </td>
-                <td style={{ padding: '9px 14px', fontSize: 11, color: '#B7B3DC', fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '9px 14px', fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap' }}>
                   {a.assignee}
                 </td>
-                <td style={{ padding: '9px 14px', fontSize: 11, color: '#B7B3DC', fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '9px 14px', fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap' }}>
                   {fmtDate(a.eta)}
                 </td>
                 <td style={{ padding: '9px 14px' }}>
@@ -236,36 +237,37 @@ function ActionSummaryTable({ actions }: { actions: ActionItem[] }) {
 }
 
 function GoLiveCalendar({ projects }: { projects: Project[] }) {
+  const p = usePalette();
   const sorted = [...projects].sort((a, b) => new Date(a.goLiveDate).getTime() - new Date(b.goLiveDate).getTime());
 
   return (
     <div style={{
-      background: 'rgba(28,28,40,0.6)',
-      border: `1px solid rgba(139,124,255,0.15)`,
+      background: p.cardBg,
+      border: `1px solid ${p.border}`,
       borderRadius: 14,
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(139,124,255,0.12)' }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: '#EEEDFE', letterSpacing: '-0.5px' }}>
+      <div style={{ padding: '18px 22px 14px', borderBottom: `1px solid ${p.borderTint}` }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: p.textPrimary, letterSpacing: '-0.5px' }}>
           Go-live Calendar
         </div>
-        <div style={{ fontSize: 12, color: '#7B7796', marginTop: 2 }}>Upcoming project launches</div>
+        <div style={{ fontSize: 12, color: p.textMuted, marginTop: 2 }}>Upcoming project launches</div>
       </div>
 
       <div style={{ padding: '8px 0' }}>
-        {sorted.map((p, i) => {
-          const hc = healthColor(p.health);
-          const days = daysFromNow(p.goLiveDate);
+        {sorted.map((proj, i) => {
+          const hc = healthColor(proj.health);
+          const days = daysFromNow(proj.goLiveDate);
           const overdue = days < 0;
           return (
             <div
-              key={p.id}
+              key={proj.id}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 14,
                 padding: '12px 22px',
-                borderBottom: i < sorted.length - 1 ? '1px solid rgba(139,124,255,0.07)' : 'none',
+                borderBottom: i < sorted.length - 1 ? `1px solid ${p.rowBg}` : 'none',
               }}
             >
               <div style={{
@@ -273,24 +275,24 @@ function GoLiveCalendar({ projects }: { projects: Project[] }) {
                 height: 10,
                 borderRadius: '50%',
                 background: hc,
-                boxShadow: `0 0 10px ${hc}`,
+                boxShadow: p.glow ? `0 0 10px ${hc}` : 'none',
                 flexShrink: 0,
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#EEEDFE', fontFamily: "'Space Grotesk',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.name}
+                <div style={{ fontSize: 13, fontWeight: 600, color: p.textPrimary, fontFamily: "'Space Grotesk',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {proj.name}
                 </div>
-                <div style={{ fontSize: 11, color: '#7B7796', marginTop: 2, fontFamily: "'JetBrains Mono',monospace" }}>
-                  {fmtDate(p.goLiveDate)}
+                <div style={{ fontSize: 11, color: p.textMuted, marginTop: 2, fontFamily: "'JetBrains Mono',monospace" }}>
+                  {fmtDate(proj.goLiveDate)}
                 </div>
               </div>
               <div style={{ flexShrink: 0, textAlign: 'right' }}>
                 <div style={{
                   fontSize: 13,
                   fontWeight: 700,
-                  color: overdue ? CORAL : hc,
+                  color: overdue ? p.coral : hc,
                   fontFamily: "'Space Grotesk',sans-serif",
-                  textShadow: `0 0 10px ${overdue ? CORAL : hc}`,
+                  textShadow: p.glow ? `0 0 10px ${overdue ? p.coral : hc}` : 'none',
                 }}>
                   {overdue ? `${Math.abs(days)}d late` : days === 0 ? 'Today!' : `${days}d`}
                 </div>
@@ -301,7 +303,7 @@ function GoLiveCalendar({ projects }: { projects: Project[] }) {
                   marginTop: 1,
                   letterSpacing: '0.04em',
                 }}>
-                  {p.health}
+                  {proj.health}
                 </div>
               </div>
             </div>
@@ -313,6 +315,7 @@ function GoLiveCalendar({ projects }: { projects: Project[] }) {
 }
 
 function GanttChart({ projects }: { projects: Project[] }) {
+  const p = usePalette();
   const svgWidth = 680;
   const rowH = 44;
   const labelW = 180;
@@ -322,8 +325,8 @@ function GanttChart({ projects }: { projects: Project[] }) {
   // Reference: span from now to furthest go-live + 14d buffer
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const maxDate = projects.reduce((max, p) => {
-    const d = new Date(p.goLiveDate);
+  const maxDate = projects.reduce((max, proj) => {
+    const d = new Date(proj.goLiveDate);
     return d > max ? d : max;
   }, now);
   const totalDays = Math.max(1, Math.round((maxDate.getTime() - now.getTime()) / 86400000) + 14);
@@ -348,38 +351,38 @@ function GanttChart({ projects }: { projects: Project[] }) {
 
   return (
     <div style={{
-      background: 'rgba(28,28,40,0.6)',
-      border: `1px solid rgba(139,124,255,0.15)`,
+      background: p.cardBg,
+      border: `1px solid ${p.border}`,
       borderRadius: 14,
       padding: '18px 22px 22px',
       marginBottom: 28,
     }}>
-      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: '#EEEDFE', letterSpacing: '-0.5px', marginBottom: 4 }}>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: p.textPrimary, letterSpacing: '-0.5px', marginBottom: 4 }}>
         Milestone Timeline
       </div>
-      <div style={{ fontSize: 12, color: '#7B7796', marginBottom: 18 }}>Go-live dates relative to today</div>
+      <div style={{ fontSize: 12, color: p.textBody, marginBottom: 18 }}>Go-live dates relative to today</div>
 
       {projects.length === 0 ? (
-        <div style={{ color: '#7B7796', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No projects loaded.</div>
+        <div style={{ color: p.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No projects loaded.</div>
       ) : (
         <svg width="100%" viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ display: 'block', overflow: 'visible' }}>
           {/* Grid lines + month labels */}
           {ticks.map(t => (
             <g key={t.label + t.x}>
-              <line x1={t.x} y1={32} x2={t.x} y2={svgHeight - 4} stroke="rgba(139,124,255,0.12)" strokeWidth={1} strokeDasharray="3 4" />
-              <text x={t.x} y={22} fill="#7B7796" fontSize={10} fontFamily="JetBrains Mono,monospace" textAnchor="middle">{t.label}</text>
+              <line x1={t.x} y1={32} x2={t.x} y2={svgHeight - 4} stroke={p.borderTint} strokeWidth={1} strokeDasharray="3 4" />
+              <text x={t.x} y={22} fill={p.textMuted} fontSize={10} fontFamily="JetBrains Mono,monospace" textAnchor="middle">{t.label}</text>
             </g>
           ))}
 
           {/* "Today" line */}
-          <line x1={labelW} y1={28} x2={labelW} y2={svgHeight - 4} stroke={V} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
-          <text x={labelW + 4} y={22} fill={V} fontSize={9} fontFamily="JetBrains Mono,monospace">TODAY</text>
+          <line x1={labelW} y1={28} x2={labelW} y2={svgHeight - 4} stroke={p.coral} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
+          <text x={labelW + 4} y={22} fill={p.coral} fontSize={9} fontFamily="JetBrains Mono,monospace">TODAY</text>
 
           {/* Bars */}
-          {projects.map((p, i) => {
+          {projects.map((proj, i) => {
             const cy = 48 + i * rowH;
-            const days = daysFromNow(p.goLiveDate);
-            const hc = healthColor(p.health);
+            const days = daysFromNow(proj.goLiveDate);
+            const hc = healthColor(proj.health);
             const barColor = PROJECT_COLORS[i % PROJECT_COLORS.length];
             const barEnd = xForDays(days);
             const barStart = labelW;
@@ -387,18 +390,18 @@ function GanttChart({ projects }: { projects: Project[] }) {
             const overdue = days < 0;
 
             return (
-              <g key={p.id}>
+              <g key={proj.id}>
                 {/* Label */}
                 <text
                   x={labelW - 10}
                   y={cy + 5}
-                  fill="#B7B3DC"
+                  fill={p.textBody}
                   fontSize={11}
                   fontFamily="Inter,sans-serif"
                   textAnchor="end"
                   dominantBaseline="middle"
                 >
-                  {p.name.length > 20 ? p.name.slice(0, 20) + '…' : p.name}
+                  {proj.name.length > 20 ? proj.name.slice(0, 20) + '…' : proj.name}
                 </text>
 
                 {/* Bar track */}
@@ -408,7 +411,7 @@ function GanttChart({ projects }: { projects: Project[] }) {
                   width={barAreaW}
                   height={16}
                   rx={8}
-                  fill="rgba(139,124,255,0.06)"
+                  fill={p.inputBg}
                 />
 
                 {/* Bar fill */}
@@ -432,7 +435,7 @@ function GanttChart({ projects }: { projects: Project[] }) {
                     width={barAreaW}
                     height={14}
                     rx={7}
-                    fill={CORAL}
+                    fill={p.coral}
                     opacity={0.35}
                   />
                 )}
@@ -441,7 +444,7 @@ function GanttChart({ projects }: { projects: Project[] }) {
                 <polygon
                   points={`${barEnd},${cy - 9} ${barEnd + 6},${cy} ${barEnd},${cy + 9} ${barEnd - 6},${cy}`}
                   fill={hc}
-                  style={{ filter: `drop-shadow(0 0 5px ${hc})` }}
+                  style={{ filter: p.glow ? `drop-shadow(0 0 5px ${hc})` : 'none' }}
                 />
 
                 {/* Days label */}
@@ -465,29 +468,30 @@ function GanttChart({ projects }: { projects: Project[] }) {
 }
 
 function RiskRegister({ actions }: { actions: ActionItem[] }) {
+  const p = usePalette();
   const risks = actions.filter(a => a.status === 'Blocked' || a.type === 'Risk');
 
   return (
     <div style={{
-      background: 'rgba(28,28,40,0.6)',
-      border: `1px solid rgba(240,153,123,0.2)`,
+      background: p.cardBg,
+      border: `1px solid ${p.coral}30`,
       borderRadius: 14,
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(240,153,123,0.12)' }}>
+      <div style={{ padding: '18px 22px 14px', borderBottom: `1px solid ${p.coral}18` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: CORAL, boxShadow: `0 0 10px ${CORAL}` }} />
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: '#EEEDFE', letterSpacing: '-0.5px' }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.coral, boxShadow: p.glow ? `0 0 10px ${p.coral}` : 'none' }} />
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: p.textPrimary, letterSpacing: '-0.5px' }}>
             Risk Register
           </div>
         </div>
-        <div style={{ fontSize: 12, color: '#7B7796', marginTop: 4, marginLeft: 18 }}>
+        <div style={{ fontSize: 12, color: p.textMuted, marginTop: 4, marginLeft: 18 }}>
           {risks.length} item{risks.length !== 1 ? 's' : ''} flagged
         </div>
       </div>
 
       {risks.length === 0 ? (
-        <div style={{ padding: '28px 22px', textAlign: 'center', color: '#7B7796', fontSize: 13 }}>
+        <div style={{ padding: '28px 22px', textAlign: 'center', color: p.textMuted, fontSize: 13 }}>
           No blocked or risk items — looking good.
         </div>
       ) : (
@@ -500,24 +504,24 @@ function RiskRegister({ actions }: { actions: ActionItem[] }) {
                 alignItems: 'flex-start',
                 gap: 16,
                 padding: '14px 22px',
-                borderLeft: `3px solid ${CORAL}`,
-                borderBottom: i < risks.length - 1 ? '1px solid rgba(240,153,123,0.08)' : 'none',
+                borderLeft: `3px solid ${p.coral}`,
+                borderBottom: i < risks.length - 1 ? `1px solid ${p.coral}14` : 'none',
                 marginLeft: 0,
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#EEEDFE', fontFamily: "'Space Grotesk',sans-serif", marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: p.textPrimary, fontFamily: "'Space Grotesk',sans-serif", marginBottom: 4 }}>
                   {a.action}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: '#B7B3DC', fontFamily: "'JetBrains Mono',monospace" }}>
+                  <span style={{ fontSize: 11, color: p.textBody, fontFamily: "'JetBrains Mono',monospace" }}>
                     {a.assignee}
                   </span>
-                  <span style={{ fontSize: 10, color: '#7B7796', fontFamily: "'JetBrains Mono',monospace" }}>
+                  <span style={{ fontSize: 10, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>
                     ETA {fmtDate(a.eta)}
                   </span>
                   {a.comment && (
-                    <span style={{ fontSize: 11, color: '#7B7796', fontFamily: "'Inter',sans-serif", fontStyle: 'italic' }}>
+                    <span style={{ fontSize: 11, color: p.textMuted, fontFamily: "'Inter',sans-serif", fontStyle: 'italic' }}>
                       "{a.comment}"
                     </span>
                   )}
@@ -538,6 +542,7 @@ function RiskRegister({ actions }: { actions: ActionItem[] }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const p = usePalette();
   const [state, setState] = useState<AppState | null>(null);
 
   function reload() {
@@ -552,13 +557,13 @@ export default function DashboardPage() {
 
   if (!state) {
     return (
-      <div style={{ padding: '32px 40px', color: '#7B7796', fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>
+      <div style={{ padding: '32px 40px', color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>
         Loading…
       </div>
     );
   }
 
-  const activeProject = state.projects.find(p => p.id === state.activeProjectId);
+  const activeProject = state.projects.find(proj => proj.id === state.activeProjectId);
 
   // Filter by projectId stamp (set when saved from workbench); fall back to showing all
   const projectActions = state.actionItems.filter(a => {
@@ -575,6 +580,8 @@ export default function DashboardPage() {
 
   return (
     <div style={{
+      background: p.pageBg,
+      minHeight: '100vh',
       padding: '32px 40px',
       maxWidth: 1300,
       margin: '0 auto',
@@ -589,7 +596,9 @@ export default function DashboardPage() {
         height: 600,
         pointerEvents: 'none',
         zIndex: 0,
-        background: 'radial-gradient(ellipse at 10% 0%, rgba(139,124,255,0.12), transparent 55%), radial-gradient(ellipse at 90% 10%, rgba(240,153,123,0.08), transparent 45%)',
+        background: p.glow
+          ? 'radial-gradient(ellipse at 10% 0%, rgba(139,124,255,0.12), transparent 55%), radial-gradient(ellipse at 90% 10%, rgba(240,153,123,0.08), transparent 45%)'
+          : 'none',
       }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>

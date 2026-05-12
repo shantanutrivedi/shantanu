@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { loadState } from '@/lib/store';
 import type { AppState, ActionItem, DailyActivity } from '@/lib/types';
+import { usePalette } from '@/lib/palette';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,19 +94,20 @@ function buildCopyText(summary: SummaryData, weekLabel: string): string {
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Skeleton() {
+  const p = usePalette();
   const pulseStyle = (w: string, h = 18, mb = 14): React.CSSProperties => ({
     width: w,
     height: h,
     borderRadius: 8,
     marginBottom: mb,
-    background: 'rgba(139,124,255,0.1)',
+    background: p.inputBg,
     animation: 'skpulse 1.5s ease-in-out infinite',
   });
 
   return (
     <div style={{
-      background: 'rgba(28,28,36,0.8)',
-      border: '1px solid rgba(139,124,255,0.2)',
+      background: p.cardBg,
+      border: `1px solid ${p.border}`,
       borderRadius: 20,
       padding: 36,
     }}>
@@ -121,7 +123,7 @@ function Skeleton() {
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-        <div style={{ borderRadius: 14, border: '1px solid rgba(139,124,255,0.1)', padding: 20 }}>
+        <div style={{ borderRadius: 14, border: `1px solid ${p.borderTint}`, padding: 20 }}>
           <div style={pulseStyle('40%', 12, 16)} />
           <div style={{ display: 'flex', gap: 20 }}>
             {['25%', '20%', '20%', '20%'].map((w, i) => (
@@ -132,7 +134,7 @@ function Skeleton() {
             ))}
           </div>
         </div>
-        <div style={{ borderRadius: 14, border: '1px solid rgba(139,124,255,0.1)', padding: 20 }}>
+        <div style={{ borderRadius: 14, border: `1px solid ${p.borderTint}`, padding: 20 }}>
           <div style={pulseStyle('40%', 12, 16)} />
           {[1, 2, 3, 4].map(i => (
             <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
@@ -152,7 +154,7 @@ function Skeleton() {
       {/* Highlights / Blockers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
         {[0, 1].map(col => (
-          <div key={col} style={{ borderRadius: 14, border: '1px solid rgba(139,124,255,0.1)', padding: 20 }}>
+          <div key={col} style={{ borderRadius: 14, border: `1px solid ${p.borderTint}`, padding: 20 }}>
             <div style={pulseStyle('45%', 12, 14)} />
             {[1, 2, 3].map(i => (
               <div key={i} style={{ marginBottom: 10 }}>
@@ -191,13 +193,14 @@ function StatBar({
   max: number;
   color: string;
 }) {
+  const p = usePalette();
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <div style={{
         width: 70,
         fontSize: 11,
-        color: '#7B7796',
+        color: p.textMuted,
         fontFamily: "'JetBrains Mono',monospace",
         flexShrink: 0,
       }}>
@@ -207,7 +210,7 @@ function StatBar({
         flex: 1,
         height: 6,
         borderRadius: 3,
-        background: 'rgba(139,124,255,0.1)',
+        background: p.inputBg,
         overflow: 'hidden',
       }}>
         <div style={{
@@ -215,7 +218,7 @@ function StatBar({
           width: `${pct}%`,
           borderRadius: 3,
           background: color,
-          boxShadow: `0 0 8px ${color}80`,
+          boxShadow: p.glow ? `0 0 8px ${color}80` : 'none',
           transition: 'width 0.7s cubic-bezier(0.25,1,0.5,1)',
         }} />
       </div>
@@ -236,6 +239,7 @@ function StatBar({
 // ── BigStat ───────────────────────────────────────────────────────────────────
 
 function BigStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const p = usePalette();
   return (
     <div style={{ textAlign: 'center', flex: 1, minWidth: 0 }}>
       <div style={{
@@ -243,7 +247,7 @@ function BigStat({ label, value, color }: { label: string; value: number; color:
         fontWeight: 700,
         fontSize: 30,
         color,
-        textShadow: `0 0 18px ${color}70`,
+        textShadow: p.glow ? `0 0 18px ${color}70` : 'none',
         lineHeight: 1,
         marginBottom: 4,
       }}>
@@ -251,7 +255,7 @@ function BigStat({ label, value, color }: { label: string; value: number; color:
       </div>
       <div style={{
         fontSize: 10,
-        color: '#7B7796',
+        color: p.textMuted,
         fontFamily: "'JetBrains Mono',monospace",
         letterSpacing: '0.04em',
       }}>
@@ -263,13 +267,14 @@ function BigStat({ label, value, color }: { label: string; value: number; color:
 
 // ── SectionLabel ──────────────────────────────────────────────────────────────
 
-function SectionLabel({ children, color = '#7B7796' }: { children: React.ReactNode; color?: string }) {
+function SectionLabel({ children, color }: { children: React.ReactNode; color?: string }) {
+  const p = usePalette();
   return (
     <div style={{
       fontSize: 11,
       textTransform: 'uppercase',
       letterSpacing: '0.07em',
-      color,
+      color: color ?? p.textMuted,
       fontFamily: "'JetBrains Mono',monospace",
       fontWeight: 600,
       marginBottom: 12,
@@ -282,6 +287,7 @@ function SectionLabel({ children, color = '#7B7796' }: { children: React.ReactNo
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SummaryPage() {
+  const p = usePalette();
   const [appState, setAppState] = useState<AppState | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -301,7 +307,7 @@ export default function SummaryPage() {
     setError('');
     setSummary(null);
 
-    const project = appState.projects.find(p => p.id === appState.activeProjectId);
+    const project = appState.projects.find(proj => proj.id === appState.activeProjectId);
 
     const activities: DailyActivity[] = (appState.activities ?? []).filter(a => {
       const d = new Date(a.date + 'T00:00:00');
@@ -348,14 +354,16 @@ export default function SummaryPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: '#1C1C24', minHeight: '100vh', color: '#EEEDFE', position: 'relative' }}>
+    <div style={{ background: p.pageBg, minHeight: '100vh', color: p.textPrimary, position: 'relative' }}>
       {/* Ambient glow */}
       <div style={{
         position: 'fixed',
         inset: 0,
         pointerEvents: 'none',
         zIndex: 0,
-        background: 'radial-gradient(ellipse at 15% 0%, rgba(139,124,255,0.18), transparent 50%), radial-gradient(ellipse at 85% 10%, rgba(240,153,123,0.09), transparent 45%)',
+        background: p.glow
+          ? 'radial-gradient(ellipse at 15% 0%, rgba(139,124,255,0.18), transparent 50%), radial-gradient(ellipse at 85% 10%, rgba(240,153,123,0.09), transparent 45%)'
+          : 'none',
       }} />
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 1000, margin: '0 auto', padding: '36px 32px 80px' }}>
@@ -368,7 +376,7 @@ export default function SummaryPage() {
             fontWeight: 600,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            color: '#8B7CFF',
+            color: p.violet,
             marginBottom: 8,
           }}>
             Executive Summary
@@ -378,7 +386,7 @@ export default function SummaryPage() {
             fontWeight: 700,
             fontSize: 34,
             letterSpacing: '-1px',
-            color: '#EEEDFE',
+            color: p.textPrimary,
             margin: '0 0 8px',
             display: 'flex',
             alignItems: 'center',
@@ -390,12 +398,12 @@ export default function SummaryPage() {
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: '#F0997B',
-              boxShadow: '0 0 12px #F0997B',
+              background: p.coral,
+              boxShadow: p.glow ? `0 0 12px ${p.coral}` : 'none',
               verticalAlign: 'middle',
             }} />
           </h1>
-          <p style={{ color: '#7B7796', fontSize: 14, margin: 0, fontFamily: "'Inter',sans-serif" }}>
+          <p style={{ color: p.textMuted, fontSize: 14, margin: 0, fontFamily: "'Inter',sans-serif" }}>
             AI-generated summary of project status, action items, and team output.
           </p>
         </div>
@@ -407,8 +415,8 @@ export default function SummaryPage() {
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            background: 'rgba(139,124,255,0.08)',
-            border: '1px solid rgba(139,124,255,0.22)',
+            background: p.inputBg,
+            border: `1px solid ${p.border}`,
             borderRadius: 12,
             padding: '5px 10px',
           }}>
@@ -417,7 +425,7 @@ export default function SummaryPage() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#8B7CFF',
+                color: p.violet,
                 cursor: 'pointer',
                 padding: '2px 8px',
                 fontSize: 18,
@@ -432,7 +440,7 @@ export default function SummaryPage() {
             <span style={{
               fontFamily: "'JetBrains Mono',monospace",
               fontSize: 12,
-              color: '#EEEDFE',
+              color: p.textPrimary,
               minWidth: 168,
               textAlign: 'center',
               userSelect: 'none',
@@ -444,7 +452,7 @@ export default function SummaryPage() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: weekOffset < 0 ? '#8B7CFF' : '#3a3a4e',
+                color: weekOffset < 0 ? p.violet : p.textMuted,
                 cursor: weekOffset < 0 ? 'pointer' : 'default',
                 padding: '2px 8px',
                 fontSize: 18,
@@ -472,9 +480,9 @@ export default function SummaryPage() {
               fontSize: 14,
               color: '#EEEDFE',
               cursor: loading ? 'not-allowed' : 'pointer',
-              background: loading ? 'rgba(83,74,183,0.35)' : 'linear-gradient(135deg,#534AB7,#7F77DD)',
+              background: loading ? `${p.midViolet}38` : 'linear-gradient(135deg,#534AB7,#7F77DD)',
               border: 'none',
-              boxShadow: loading ? 'none' : '0 0 22px rgba(83,74,183,0.5)',
+              boxShadow: loading ? 'none' : p.glow ? '0 0 22px rgba(83,74,183,0.5)' : '0 2px 8px rgba(83,74,183,0.3)',
               fontFamily: "'Space Grotesk',sans-serif",
               transition: 'all 0.2s',
               opacity: loading ? 0.8 : 1,
@@ -505,10 +513,10 @@ export default function SummaryPage() {
                 borderRadius: 12,
                 fontWeight: 500,
                 fontSize: 13,
-                color: copied ? '#B6FF6E' : '#B7B3DC',
+                color: copied ? p.lime : p.textBody,
                 cursor: 'pointer',
-                background: copied ? 'rgba(182,255,110,0.07)' : 'rgba(139,124,255,0.06)',
-                border: `1px solid ${copied ? 'rgba(182,255,110,0.3)' : 'rgba(139,124,255,0.2)'}`,
+                background: copied ? `${p.lime}12` : p.inputBg,
+                border: `1px solid ${copied ? `${p.lime}48` : p.border}`,
                 fontFamily: "'Inter',sans-serif",
                 transition: 'all 0.2s',
               }}
@@ -528,9 +536,9 @@ export default function SummaryPage() {
             padding: '14px 18px',
             borderRadius: 12,
             marginBottom: 24,
-            background: 'rgba(240,153,123,0.1)',
-            border: '1px solid rgba(240,153,123,0.3)',
-            color: '#F0997B',
+            background: `${p.coral}18`,
+            border: `1px solid ${p.coral}48`,
+            color: p.coral,
             fontSize: 14,
             fontFamily: "'Inter',sans-serif",
             display: 'flex',
@@ -548,11 +556,11 @@ export default function SummaryPage() {
         {/* ── Summary Report Card ──────────────────────────────────────────── */}
         {summary && !loading && (
           <div style={{
-            background: 'rgba(28,28,36,0.8)',
-            border: '1px solid rgba(139,124,255,0.2)',
+            background: p.cardBg,
+            border: `1px solid ${p.border}`,
             borderRadius: 20,
             padding: 36,
-            boxShadow: '0 16px 60px rgba(0,0,0,0.4)',
+            boxShadow: p.glow ? '0 16px 60px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)',
           }}>
 
             {/* ── Headline banner ──────────────────────────────────────────── */}
@@ -563,7 +571,7 @@ export default function SummaryPage() {
               gap: 20,
               marginBottom: 32,
               paddingBottom: 28,
-              borderBottom: '1px solid rgba(139,124,255,0.12)',
+              borderBottom: `1px solid ${p.borderTint}`,
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
@@ -572,7 +580,7 @@ export default function SummaryPage() {
                   fontWeight: 600,
                   letterSpacing: '0.09em',
                   textTransform: 'uppercase',
-                  color: '#7B7796',
+                  color: p.textMuted,
                   marginBottom: 10,
                 }}>
                   {week.label}
@@ -582,7 +590,7 @@ export default function SummaryPage() {
                   fontWeight: 700,
                   fontSize: 28,
                   letterSpacing: '-0.7px',
-                  color: '#EEEDFE',
+                  color: p.textPrimary,
                   margin: 0,
                   lineHeight: 1.2,
                 }}>
@@ -603,7 +611,7 @@ export default function SummaryPage() {
                 background: `${HEALTH_COLORS[summary.health]}15`,
                 color: HEALTH_COLORS[summary.health],
                 border: `1px solid ${HEALTH_COLORS[summary.health]}38`,
-                boxShadow: `0 0 20px ${HEALTH_COLORS[summary.health]}25`,
+                boxShadow: p.glow ? `0 0 20px ${HEALTH_COLORS[summary.health]}25` : 'none',
                 fontFamily: "'Space Grotesk',sans-serif",
               }}>
                 <span style={{
@@ -611,7 +619,7 @@ export default function SummaryPage() {
                   height: 7,
                   borderRadius: '50%',
                   background: HEALTH_COLORS[summary.health],
-                  boxShadow: `0 0 8px ${HEALTH_COLORS[summary.health]}`,
+                  boxShadow: p.glow ? `0 0 8px ${HEALTH_COLORS[summary.health]}` : 'none',
                   display: 'inline-block',
                 }} />
                 {summary.health}
@@ -623,33 +631,33 @@ export default function SummaryPage() {
 
               {/* Action status */}
               <div style={{
-                background: 'rgba(139,124,255,0.04)',
-                border: '1px solid rgba(139,124,255,0.12)',
+                background: p.inputBg,
+                border: `1px solid ${p.borderTint}`,
                 borderRadius: 14,
                 padding: 20,
               }}>
                 <SectionLabel>Action Status</SectionLabel>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
-                  <BigStat label="TOTAL"       value={summary.stats.total}      color="#B7B3DC" />
-                  <BigStat label="DONE"        value={summary.stats.done}       color="#B6FF6E" />
-                  <BigStat label="IN PROGRESS" value={summary.stats.inProgress} color="#56E0FF" />
-                  <BigStat label="BLOCKED"     value={summary.stats.blocked}    color="#F0997B" />
+                  <BigStat label="TOTAL"       value={summary.stats.total}      color={p.textBody} />
+                  <BigStat label="DONE"        value={summary.stats.done}       color={p.lime} />
+                  <BigStat label="IN PROGRESS" value={summary.stats.inProgress} color={p.cyan} />
+                  <BigStat label="BLOCKED"     value={summary.stats.blocked}    color={p.coral} />
                 </div>
               </div>
 
               {/* By type bars */}
               <div style={{
-                background: 'rgba(139,124,255,0.04)',
-                border: '1px solid rgba(139,124,255,0.12)',
+                background: p.inputBg,
+                border: `1px solid ${p.borderTint}`,
                 borderRadius: 14,
                 padding: 20,
               }}>
                 <SectionLabel>By Type</SectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <StatBar label="Features" value={summary.stats.features} max={Math.max(1, summary.stats.total)} color="#56E0FF" />
+                  <StatBar label="Features" value={summary.stats.features} max={Math.max(1, summary.stats.total)} color={p.cyan} />
                   <StatBar label="Bugs"     value={summary.stats.bugs}     max={Math.max(1, summary.stats.total)} color="#FFB089" />
-                  <StatBar label="Configs"  value={summary.stats.configs}  max={Math.max(1, summary.stats.total)} color="#FFCB5C" />
-                  <StatBar label="Risks"    value={summary.stats.risks}    max={Math.max(1, summary.stats.total)} color="#FF6FD8" />
+                  <StatBar label="Configs"  value={summary.stats.configs}  max={Math.max(1, summary.stats.total)} color={p.amber} />
+                  <StatBar label="Risks"    value={summary.stats.risks}    max={Math.max(1, summary.stats.total)} color={p.pink} />
                 </div>
               </div>
             </div>
@@ -660,7 +668,7 @@ export default function SummaryPage() {
               <p style={{
                 fontSize: 15,
                 lineHeight: 1.7,
-                color: '#B7B3DC',
+                color: p.textBody,
                 margin: 0,
                 fontFamily: "'Inter',sans-serif",
               }}>
@@ -673,24 +681,24 @@ export default function SummaryPage() {
 
               {/* Highlights */}
               <div style={{
-                background: 'rgba(182,255,110,0.04)',
-                border: '1px solid rgba(182,255,110,0.14)',
+                background: p.glow ? 'rgba(182,255,110,0.04)' : 'rgba(74,146,0,0.06)',
+                border: `1px solid ${p.glow ? 'rgba(182,255,110,0.14)' : 'rgba(74,146,0,0.18)'}`,
                 borderRadius: 14,
                 padding: 20,
               }}>
-                <SectionLabel color="#B6FF6E">Highlights</SectionLabel>
+                <SectionLabel color={p.lime}>Highlights</SectionLabel>
                 {summary.highlights.length === 0 ? (
-                  <div style={{ fontSize: 13, color: '#7B7796', fontStyle: 'italic' }}>
+                  <div style={{ fontSize: 13, color: p.textMuted, fontStyle: 'italic' }}>
                     No highlights recorded.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {summary.highlights.map((h, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <span style={{ color: '#B6FF6E', marginTop: 1, flexShrink: 0, fontSize: 13 }}>✓</span>
+                        <span style={{ color: p.lime, marginTop: 1, flexShrink: 0, fontSize: 13 }}>✓</span>
                         <span style={{
                           fontSize: 13,
-                          color: '#B7B3DC',
+                          color: p.textBody,
                           lineHeight: 1.5,
                           fontFamily: "'Inter',sans-serif",
                         }}>
@@ -704,16 +712,16 @@ export default function SummaryPage() {
 
               {/* Blockers */}
               <div style={{
-                background: 'rgba(240,153,123,0.04)',
-                border: '1px solid rgba(240,153,123,0.16)',
+                background: `${p.coral}08`,
+                border: `1px solid ${p.coral}28`,
                 borderRadius: 14,
                 padding: 20,
               }}>
-                <SectionLabel color="#F0997B">Blockers</SectionLabel>
+                <SectionLabel color={p.coral}>Blockers</SectionLabel>
                 {summary.blockers.length === 0 ? (
                   <div style={{
                     fontSize: 13,
-                    color: '#7B7796',
+                    color: p.textMuted,
                     fontStyle: 'italic',
                     fontFamily: "'Inter',sans-serif",
                   }}>
@@ -726,12 +734,12 @@ export default function SummaryPage() {
                         key={i}
                         style={{
                           paddingLeft: 12,
-                          borderLeft: '2px solid rgba(240,153,123,0.45)',
+                          borderLeft: `2px solid ${p.coral}70`,
                         }}
                       >
                         <div style={{
                           fontSize: 13,
-                          color: '#EEEDFE',
+                          color: p.textPrimary,
                           fontWeight: 500,
                           marginBottom: 3,
                           fontFamily: "'Inter',sans-serif",
@@ -740,7 +748,7 @@ export default function SummaryPage() {
                         </div>
                         <div style={{
                           fontSize: 11,
-                          color: '#7B7796',
+                          color: p.textMuted,
                           fontFamily: "'JetBrains Mono',monospace",
                         }}>
                           {b.owner} · {b.impact}
@@ -756,15 +764,15 @@ export default function SummaryPage() {
             <div style={{ marginBottom: 28 }}>
               <SectionLabel>Next Week Priorities</SectionLabel>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {summary.nextWeek.map((p, i) => (
+                {summary.nextWeek.map((item, i) => (
                   <div
                     key={i}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 14,
-                      background: 'rgba(139,124,255,0.05)',
-                      border: '1px solid rgba(139,124,255,0.1)',
+                      background: p.inputBg,
+                      border: `1px solid ${p.borderTint}`,
                       borderRadius: 10,
                       padding: '11px 16px',
                     }}
@@ -773,7 +781,7 @@ export default function SummaryPage() {
                       fontFamily: "'Space Grotesk',sans-serif",
                       fontWeight: 700,
                       fontSize: 15,
-                      color: '#534AB7',
+                      color: p.violet,
                       minWidth: 22,
                       textAlign: 'center',
                       flexShrink: 0,
@@ -782,11 +790,11 @@ export default function SummaryPage() {
                     </span>
                     <span style={{
                       fontSize: 13,
-                      color: '#B7B3DC',
+                      color: p.textBody,
                       fontFamily: "'Inter',sans-serif",
                       lineHeight: 1.45,
                     }}>
-                      {p}
+                      {item}
                     </span>
                   </div>
                 ))}
@@ -798,8 +806,8 @@ export default function SummaryPage() {
               padding: '13px 18px',
               borderRadius: 10,
               marginBottom: 18,
-              background: 'rgba(86,224,255,0.06)',
-              border: '1px solid rgba(86,224,255,0.16)',
+              background: `${p.cyan}10`,
+              border: `1px solid ${p.cyan}28`,
               display: 'flex',
               alignItems: 'center',
               gap: 14,
@@ -808,14 +816,14 @@ export default function SummaryPage() {
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
-                color: '#56E0FF',
+                color: p.cyan,
                 fontFamily: "'JetBrains Mono',monospace",
                 fontWeight: 600,
                 flexShrink: 0,
               }}>
                 Go-live
               </span>
-              <span style={{ fontSize: 14, color: '#B7B3DC', fontFamily: "'Inter',sans-serif" }}>
+              <span style={{ fontSize: 14, color: p.textBody, fontFamily: "'Inter',sans-serif" }}>
                 {summary.goLiveStatus}
               </span>
             </div>
@@ -824,14 +832,14 @@ export default function SummaryPage() {
             <div style={{
               padding: '18px 22px',
               borderRadius: 12,
-              background: 'rgba(139,124,255,0.06)',
-              borderLeft: '3px solid #7F77DD',
+              background: p.inputBg,
+              borderLeft: `3px solid ${p.midViolet}`,
             }}>
-              <SectionLabel color="#8B7CFF">Recommendation</SectionLabel>
+              <SectionLabel color={p.violet}>Recommendation</SectionLabel>
               <p style={{
                 fontSize: 14,
                 lineHeight: 1.65,
-                color: '#EEEDFE',
+                color: p.textPrimary,
                 fontStyle: 'italic',
                 margin: 0,
                 fontFamily: "'Inter',sans-serif",
@@ -847,14 +855,14 @@ export default function SummaryPage() {
           <div style={{
             textAlign: 'center',
             padding: '80px 40px',
-            background: 'rgba(139,124,255,0.04)',
-            border: '1px dashed rgba(139,124,255,0.22)',
+            background: p.inputBg,
+            border: `1px dashed ${p.border}`,
             borderRadius: 20,
           }}>
             <div style={{
               fontSize: 44,
               marginBottom: 16,
-              color: '#534AB7',
+              color: p.violet,
               fontFamily: "'Space Grotesk',sans-serif",
               fontWeight: 700,
             }}>
@@ -864,13 +872,13 @@ export default function SummaryPage() {
               fontFamily: "'Space Grotesk',sans-serif",
               fontWeight: 600,
               fontSize: 20,
-              color: '#EEEDFE',
+              color: p.textPrimary,
               marginBottom: 8,
             }}>
               Ready to generate
             </div>
-            <div style={{ color: '#7B7796', fontSize: 14, fontFamily: "'Inter',sans-serif" }}>
-              Select a week and click <strong style={{ color: '#8B7CFF' }}>Generate Summary</strong> to produce an AI-written executive report.
+            <div style={{ color: p.textMuted, fontSize: 14, fontFamily: "'Inter',sans-serif" }}>
+              Select a week and click <strong style={{ color: p.violet }}>Generate Summary</strong> to produce an AI-written executive report.
             </div>
           </div>
         )}
