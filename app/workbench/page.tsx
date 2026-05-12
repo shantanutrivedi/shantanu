@@ -200,6 +200,34 @@ function EditableCell({ value, col, rowId, onEdit }: EditableCellProps) {
     );
   }
 
+  if (col === 'eta') {
+    function fmtDate(iso: string) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '—';
+      const [y, m, d] = iso.split('-').map(Number);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(d).padStart(2,'0')} ${months[m-1]} ${y}`;
+    }
+    return (
+      <td style={cellStyle} onClick={() => setEditing(true)}>
+        {editing ? (
+          <input
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="date"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
+            style={{ ...inputStyle, colorScheme: p.glow ? 'dark' : 'light', cursor: 'pointer' }}
+          />
+        ) : (
+          <span style={{ color: draft ? p.cyan : p.textMuted }}>
+            {fmtDate(draft)}
+          </span>
+        )}
+      </td>
+    );
+  }
+
   if (col === 'jiraUrl') {
     return (
       <td style={cellStyle} onClick={() => setEditing(true)}>

@@ -50,8 +50,9 @@ export function fmtDate(raw: string): string {
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_INITIALS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-function CalendarPicker({ value, onSelect, onClose, p }: {
+function CalendarPicker({ value, onSelect, onClose, p, fixedPos }: {
   value: string; onSelect: (d: string) => void; onClose: () => void; p: Palette;
+  fixedPos?: { top: number; left: number };
 }) {
   const init = value ? new Date(value + 'T00:00:00') : new Date();
   const [yr, setYr] = useState(init.getFullYear());
@@ -83,12 +84,16 @@ function CalendarPicker({ value, onSelect, onClose, p }: {
   for (let d=1; d<=days; d++) cells.push(d);
   while (cells.length%7) cells.push(null);
 
+  const posStyle = fixedPos
+    ? { position: 'fixed' as const, top: fixedPos.top, left: fixedPos.left }
+    : { position: 'absolute' as const, top: '100%', left: 0 };
+
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: '100%', left: 0, zIndex: 300, marginTop: 6,
+      ...posStyle, zIndex: 9999, marginTop: fixedPos ? 0 : 6,
       background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 14,
       padding: 16, width: 268,
-      boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
+      boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
     }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 12 }}>
         <button onClick={prev} style={{ background:'none', border:'none', cursor:'pointer', color: p.violet, fontSize: 20, lineHeight:1, padding:'0 6px' }}>‹</button>
@@ -235,6 +240,7 @@ export default function TasksPage() {
   const [colFilters, setColFilters] = useState<Partial<Record<ColKey, string>>>({});
   const [openFilter, setOpenFilter] = useState<ColKey | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarRect, setCalendarRect] = useState<{ top: number; left: number } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ updated: number; error?: string } | null>(null);
 
@@ -516,13 +522,17 @@ export default function TasksPage() {
                       }}>
                         {col.filterable ? (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
                               if (col.filterable === 'date') {
-                                setCalendarOpen(o => !o);
-                                setOpenFilter(openFilter === col.key ? null : col.key);
+                                const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                const isOpen = openFilter === col.key;
+                                setCalendarOpen(!isOpen);
+                                setOpenFilter(isOpen ? null : col.key);
+                                setCalendarRect(isOpen ? null : { top: rect.bottom + 6, left: rect.left });
                               } else {
                                 setOpenFilter(openFilter === col.key ? null : col.key);
                                 setCalendarOpen(false);
+                                setCalendarRect(null);
                               }
                             }}
                             style={{
@@ -539,16 +549,6 @@ export default function TasksPage() {
                           </button>
                         ) : (
                           col.label
-                        )}
-
-                        {/* Calendar popup for ETA */}
-                        {col.filterable === 'date' && openFilter === col.key && (
-                          <CalendarPicker
-                            value={filterVal}
-                            onSelect={v => setColFilter(col.key, v)}
-                            onClose={() => { setOpenFilter(null); setCalendarOpen(false); }}
-                            p={p}
-                          />
                         )}
 
                         {/* Text/select dropdown */}
@@ -655,6 +655,17 @@ export default function TasksPage() {
           ))}
         </div>
       </div>
+
+      {/* Page-level calendar — rendered outside overflow:hidden table container */}
+      {openFilter === 'eta' && calendarRect && (
+        <CalendarPicker
+          value={colFilters.eta ?? ''}
+          onSelect={v => setColFilter('eta', v)}
+          onClose={() => { setOpenFilter(null); setCalendarOpen(false); setCalendarRect(null); }}
+          p={p}
+          fixedPos={calendarRect}
+        />
+      )}
     </div>
   );
 }
