@@ -282,7 +282,10 @@ export default function Nav() {
               <div style={{ height: 1, margin: '4px 0', background: dropdownBorder }} />
 
               {/* Sign out */}
-              <button onClick={() => signOut({ callbackUrl: '/' })}
+              <button onClick={async () => {
+                  await signOut({ redirect: false });
+                  window.location.replace('/');
+                }}
                 style={{ width: '100%', textAlign: 'left', padding: '10px 16px', cursor: 'pointer',
                   background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 10,
                   color: dark ? '#F0997B' : '#D9614A', fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
