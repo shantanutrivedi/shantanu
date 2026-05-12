@@ -32,6 +32,12 @@ export interface DailyActivity {
   createdAt: string;
 }
 
+export interface MOMUploadVersion {
+  version: number;
+  savedAt: string;
+  parsedItems: ActionItem[];
+}
+
 export interface MOMUpload {
   id: string;
   filename: string;
@@ -39,6 +45,7 @@ export interface MOMUpload {
   projectId: string;
   rawText: string;
   parsedItems: ActionItem[];
+  versions?: MOMUploadVersion[];  // version history; optional for backward compat
 }
 
 export interface AppState {
