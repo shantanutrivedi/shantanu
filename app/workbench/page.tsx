@@ -25,15 +25,16 @@ const PRODUCT_OPTIONS = ['AI for Work', 'Search AI', 'Agent Platform'];
 const VALID_PRODUCTS = new Set(PRODUCT_OPTIONS);
 
 const TABLE_COLS = [
-  { key: 'action',   label: 'Action Item', pct: '22%', wrap: true  },
-  { key: 'assignee', label: 'Assignee',    pct: '9%',  wrap: false },
-  { key: 'eta',      label: 'ETA',         pct: '8%',  wrap: false },
-  { key: 'product',  label: 'Product',     pct: '10%', wrap: false },
-  { key: 'priority', label: 'Priority',    pct: '9%',  wrap: false },
-  { key: 'type',     label: 'Type',        pct: '7%',  wrap: false },
-  { key: 'status',   label: 'Status',      pct: '11%', wrap: false },
-  { key: 'comment',  label: 'Comment',     pct: '14%', wrap: true  },
-  { key: 'jiraUrl',  label: 'Jira URL',    pct: '8%',  wrap: false },
+  { key: 'action',    label: 'Action Item', pct: '20%', wrap: true  },
+  { key: 'assignee',  label: 'Assignee',    pct: '8%',  wrap: false },
+  { key: 'startDate', label: 'Start',       pct: '7%',  wrap: false },
+  { key: 'eta',       label: 'ETA',         pct: '7%',  wrap: false },
+  { key: 'product',   label: 'Product',     pct: '9%',  wrap: false },
+  { key: 'priority',  label: 'Priority',    pct: '8%',  wrap: false },
+  { key: 'type',      label: 'Type',        pct: '7%',  wrap: false },
+  { key: 'status',    label: 'Status',      pct: '10%', wrap: false },
+  { key: 'comment',   label: 'Comment',     pct: '12%', wrap: true  },
+  { key: 'jiraUrl',   label: 'Jira URL',    pct: '7%',  wrap: false },
 ] as const;
 
 type ColKey = (typeof TABLE_COLS)[number]['key'];
@@ -92,7 +93,9 @@ function fmtDateTime(iso: string) {
 function newBlankItem(): ActionItem {
   return {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() + Math.random(),
-    action: '', assignee: '', eta: '', product: '',
+    action: '', assignee: '',
+    startDate: new Date().toISOString().split('T')[0],
+    eta: '', product: '',
     priority: 'Medium', type: 'Feature', status: 'Pending', comment: '', jiraUrl: '',
   };
 }
@@ -204,16 +207,19 @@ function EditableCell({ value, col, rowId, onEdit }: {
     </td>
   );
 
-  if (col === 'eta') return (
-    <td style={cellStyle} onClick={() => setEditing(true)}>
-      {editing
-        ? <input ref={inputRef as React.RefObject<HTMLInputElement>} type="date" value={draft}
-            onChange={e => setDraft(e.target.value)} onBlur={commit}
-            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
-            style={{ ...inputStyle, colorScheme: p.glow ? 'dark' : 'light', cursor:'pointer' }} />
-        : <span style={{ color: draft ? p.cyan : p.textMuted }}>{fmtDate(draft)}</span>}
-    </td>
-  );
+  if (col === 'startDate' || col === 'eta') {
+    const color = col === 'startDate' ? p.lime : p.cyan;
+    return (
+      <td style={cellStyle} onClick={() => setEditing(true)}>
+        {editing
+          ? <input ref={inputRef as React.RefObject<HTMLInputElement>} type="date" value={draft}
+              onChange={e => setDraft(e.target.value)} onBlur={commit}
+              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
+              style={{ ...inputStyle, colorScheme: p.glow ? 'dark' : 'light', cursor:'pointer' }} />
+          : <span style={{ color: draft ? color : p.textMuted }}>{fmtDate(draft)}</span>}
+      </td>
+    );
+  }
 
   if (col === 'jiraUrl') return (
     <td style={cellStyle} onClick={() => setEditing(true)}>
@@ -349,7 +355,7 @@ function MergeModal({ pair, onConfirm, onCancel }: {
   }
 
   const colLabelMap: Record<ColKey, string> = {
-    action:'Action', assignee:'Assignee', eta:'ETA', product:'Product',
+    action:'Action', assignee:'Assignee', startDate:'Start', eta:'ETA', product:'Product',
     priority:'Priority', type:'Type', status:'Status', comment:'Comment', jiraUrl:'Jira URL',
   };
 
@@ -932,7 +938,9 @@ export default function WorkbenchPage() {
       if (data.success && Array.isArray(data.items)) {
         const items: ActionItem[] = data.items.map((item: Partial<ActionItem>) => ({
           id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString() + Math.random(),
-          action: item.action ?? '', assignee: item.assignee ?? '', eta: item.eta ?? '',
+          action: item.action ?? '', assignee: item.assignee ?? '',
+          startDate: item.startDate ?? new Date().toISOString().split('T')[0],
+          eta: item.eta ?? '',
           product: VALID_PRODUCTS.has(item.product ?? '') ? item.product! : '',
           priority: (['High','Medium','Low'].includes(item.priority ?? '') ? item.priority : 'Medium') as ActionItem['priority'],
           type: (['Feature','Bug','Config','Risk','Decision','Other'].includes(item.type ?? '') ? item.type : 'Other') as ActionItem['type'],

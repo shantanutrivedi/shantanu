@@ -315,154 +315,361 @@ function GoLiveCalendar({ projects }: { projects: Project[] }) {
   );
 }
 
-function GanttChart({ projects }: { projects: Project[] }) {
+// ── Gantt chart — proper calendar day-view ───────────────────────────────────
+
+const TYPE_GANTT_COLORS: Record<ActionItem['type'], string> = {
+  Feature:  '#8B7CFF',
+  Bug:      '#FFB089',
+  Config:   '#FFCB5C',
+  Risk:     '#FF6FD8',
+  Decision: '#56E0FF',
+  Other:    '#7B7796',
+};
+
+const DAY_W  = 34;   // px per day column
+const ROW_H  = 48;   // px per task row
+const LABEL_W = 230; // px for sticky left panel
+const HDR_H  = 54;   // total header height (month row + day row)
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+function isWeekend(d: Date) {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+function GanttChart({ projects, actions }: { projects: Project[]; actions: ActionItem[] }) {
   const p = usePalette();
-  const svgWidth = 680;
-  const rowH = 44;
-  const labelW = 180;
-  const barAreaW = svgWidth - labelW - 24;
-  const svgHeight = projects.length * rowH + 48;
+  const [tooltip, setTooltip] = useState<{ item: ActionItem; x: number; y: number } | null>(null);
 
-  // Reference: span from now to furthest go-live + 14d buffer
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const maxDate = projects.reduce((max, proj) => {
-    const d = new Date(proj.goLiveDate);
-    return d > max ? d : max;
-  }, now);
-  const totalDays = Math.max(1, Math.round((maxDate.getTime() - now.getTime()) / 86400000) + 14);
+  // Only items that have at least an ETA; use startDate or today as the left edge
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  function xForDays(d: number) {
-    return labelW + Math.max(0, Math.min(1, d / totalDays)) * barAreaW;
-  }
-
-  // Month tick marks
-  const ticks: { label: string; x: number }[] = [];
-  const tickDate = new Date(now);
-  tickDate.setDate(1);
-  tickDate.setMonth(tickDate.getMonth() + 1);
-  while (tickDate <= maxDate) {
-    const d = Math.round((tickDate.getTime() - now.getTime()) / 86400000);
-    ticks.push({
-      label: tickDate.toLocaleDateString('en-GB', { month: 'short' }),
-      x: xForDays(d),
+  const ganttItems = actions
+    .filter(a => a.eta && /^\d{4}-\d{2}-\d{2}$/.test(a.eta))
+    .map(a => {
+      const start = a.startDate && /^\d{4}-\d{2}-\d{2}$/.test(a.startDate)
+        ? new Date(a.startDate)
+        : new Date(today);
+      const end   = new Date(a.eta);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return { ...a, startD: start, endD: end < start ? start : end };
     });
-    tickDate.setMonth(tickDate.getMonth() + 1);
-  }
+
+  // Date range: earliest start or 3 days before today, latest end or 30 days out — plus padding
+  const rangeStart = ganttItems.length
+    ? addDays(ganttItems.reduce((m, i) => i.startD < m ? i.startD : m, ganttItems[0].startD), -2)
+    : addDays(today, -2);
+  const rangeEnd = ganttItems.length
+    ? addDays(ganttItems.reduce((m, i) => i.endD > m ? i.endD : m, ganttItems[0].endD), 4)
+    : addDays(today, 28);
+  rangeStart.setHours(0, 0, 0, 0);
+  rangeEnd.setHours(0, 0, 0, 0);
+
+  const totalDays = Math.max(7, daysBetween(rangeStart, rangeEnd) + 1);
+  const days: Date[] = Array.from({ length: totalDays }, (_, i) => addDays(rangeStart, i));
+
+  // Build month header spans
+  const monthSpans: { label: string; count: number }[] = [];
+  days.forEach(d => {
+    const label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    if (monthSpans.length === 0 || monthSpans[monthSpans.length - 1].label !== label) {
+      monthSpans.push({ label, count: 1 });
+    } else {
+      monthSpans[monthSpans.length - 1].count++;
+    }
+  });
+
+  const totalGridW = totalDays * DAY_W;
+  const todayOffset = daysBetween(rangeStart, today);
+
+  // Status dot color
+  const statusColor = (s: ActionItem['status']) =>
+    s === 'Done' ? p.lime : s === 'In Progress' ? p.cyan : s === 'Blocked' ? p.coral : p.textMuted;
 
   return (
     <div style={{
-      background: p.cardBg,
-      border: `1px solid ${p.border}`,
-      borderRadius: 14,
-      padding: '18px 22px 22px',
-      marginBottom: 28,
+      background: p.cardBg, border: `1px solid ${p.border}`,
+      borderRadius: 16, marginBottom: 28, overflow: 'hidden',
     }}>
-      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: p.textPrimary, letterSpacing: '-0.5px', marginBottom: 4 }}>
-        Milestone Timeline
+      {/* Card header */}
+      <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${p.borderTint}` }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22,
+          color: p.textPrimary, letterSpacing: '-0.5px', marginBottom: 3 }}>
+          Milestone Timeline
+        </div>
+        <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif" }}>
+          {ganttItems.length} task{ganttItems.length !== 1 ? 's' : ''} — set Start &amp; ETA dates in Workbench to populate this view
+        </div>
       </div>
-      <div style={{ fontSize: 12, color: p.textBody, marginBottom: 18 }}>Go-live dates relative to today</div>
 
-      {projects.length === 0 ? (
-        <div style={{ color: p.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No projects loaded.</div>
+      {ganttItems.length === 0 ? (
+        <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
+          <div style={{ fontSize: 13, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+            No tasks with dates yet.<br />
+            Open <strong>Workbench</strong> and set <strong>Start</strong> and <strong>ETA</strong> dates on your features and tasks.
+          </div>
+        </div>
       ) : (
-        <svg width="100%" viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ display: 'block', overflow: 'visible' }}>
-          {/* Grid lines + month labels */}
-          {ticks.map(t => (
-            <g key={t.label + t.x}>
-              <line x1={t.x} y1={32} x2={t.x} y2={svgHeight - 4} stroke={p.borderTint} strokeWidth={1} strokeDasharray="3 4" />
-              <text x={t.x} y={22} fill={p.textMuted} fontSize={10} fontFamily="JetBrains Mono,monospace" textAnchor="middle">{t.label}</text>
-            </g>
+        <div style={{ overflowX: 'auto', position: 'relative' }}>
+          <div style={{ minWidth: LABEL_W + totalGridW, position: 'relative' }}>
+
+            {/* ── HEADER ── */}
+            <div style={{ display: 'flex', height: HDR_H, borderBottom: `1px solid ${p.border}`,
+              background: p.glow ? 'rgba(28,28,36,0.8)' : 'rgba(250,249,255,0.95)',
+              position: 'sticky', top: 0, zIndex: 10 }}>
+
+              {/* Label column header */}
+              <div style={{
+                width: LABEL_W, flexShrink: 0,
+                borderRight: `1px solid ${p.border}`,
+                display: 'flex', alignItems: 'center', padding: '0 16px',
+                position: 'sticky', left: 0, zIndex: 11,
+                background: p.glow ? 'rgba(28,28,36,0.95)' : 'rgba(250,249,255,0.99)',
+              }}>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace",
+                  color: p.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Task
+                </span>
+              </div>
+
+              {/* Month + day numbers */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {/* Month row */}
+                <div style={{ display: 'flex', height: 22, borderBottom: `1px solid ${p.borderTint}` }}>
+                  {monthSpans.map((ms, i) => (
+                    <div key={i} style={{
+                      width: ms.count * DAY_W, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', paddingLeft: 8,
+                      borderRight: `1px solid ${p.borderTint}`,
+                      fontSize: 10, fontFamily: "'Space Grotesk',sans-serif",
+                      fontWeight: 700, color: p.textMuted, letterSpacing: '0.04em',
+                    }}>
+                      {ms.label}
+                    </div>
+                  ))}
+                </div>
+                {/* Day row */}
+                <div style={{ display: 'flex', height: 32, alignItems: 'center' }}>
+                  {days.map((d, i) => {
+                    const isToday = isSameDay(d, today);
+                    const weekend = isWeekend(d);
+                    return (
+                      <div key={i} style={{
+                        width: DAY_W, flexShrink: 0, textAlign: 'center',
+                        fontSize: 10, fontFamily: "'JetBrains Mono',monospace",
+                        fontWeight: isToday ? 700 : 400,
+                        color: isToday ? p.coral : weekend ? p.textMuted + '80' : p.textMuted,
+                        borderRight: `1px solid ${p.borderTint}20`,
+                        position: 'relative',
+                      }}>
+                        {d.getDate()}
+                        {isToday && (
+                          <div style={{
+                            position: 'absolute', bottom: 0, left: '50%',
+                            transform: 'translateX(-50%)',
+                            width: 4, height: 4, borderRadius: '50%', background: p.coral,
+                          }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ── ROWS ── */}
+            {ganttItems.map((item, rowIdx) => {
+              const barStart = daysBetween(rangeStart, item.startD);
+              const barLen   = Math.max(1, daysBetween(item.startD, item.endD));
+              const barColor = TYPE_GANTT_COLORS[item.type];
+              const sc       = statusColor(item.status);
+              const isDone   = item.status === 'Done';
+
+              return (
+                <div key={item.id} style={{
+                  display: 'flex', height: ROW_H, position: 'relative',
+                  borderBottom: `1px solid ${p.borderTint}`,
+                  background: rowIdx % 2 === 0 ? 'transparent' : (p.glow ? 'rgba(255,255,255,0.015)' : 'rgba(83,74,183,0.02)'),
+                }}>
+                  {/* Sticky label */}
+                  <div style={{
+                    width: LABEL_W, flexShrink: 0,
+                    position: 'sticky', left: 0, zIndex: 3,
+                    background: rowIdx % 2 === 0
+                      ? (p.glow ? '#1C1C24' : '#FAF9FF')
+                      : (p.glow ? 'rgba(28,28,36,0.97)' : 'rgba(248,247,255,0.97)'),
+                    borderRight: `1px solid ${p.border}`,
+                    display: 'flex', alignItems: 'center',
+                    padding: '0 14px', gap: 10, overflow: 'hidden',
+                  }}>
+                    {/* Status dot */}
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: sc, boxShadow: p.glow ? `0 0 6px ${sc}` : 'none',
+                    }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 12, fontFamily: "'Inter',sans-serif",
+                        fontWeight: 500, color: isDone ? p.textMuted : p.textPrimary,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        textDecoration: isDone ? 'line-through' : 'none',
+                      }}>
+                        {item.action}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <span style={{
+                          fontSize: 9, padding: '1px 5px', borderRadius: 4,
+                          background: `${barColor}20`, color: barColor,
+                          fontFamily: "'JetBrains Mono',monospace", fontWeight: 700,
+                          letterSpacing: '0.04em', textTransform: 'uppercase',
+                        }}>{item.type}</span>
+                        {item.assignee && (
+                          <span style={{ fontSize: 10, color: p.textMuted,
+                            fontFamily: "'Inter',sans-serif",
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.assignee}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Calendar grid + bar */}
+                  <div style={{ position: 'relative', width: totalGridW, flexShrink: 0 }}>
+                    {/* Weekend shading */}
+                    {days.map((d, i) => isWeekend(d) ? (
+                      <div key={i} style={{
+                        position: 'absolute', left: i * DAY_W, top: 0,
+                        width: DAY_W, height: ROW_H,
+                        background: p.glow ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.025)',
+                        pointerEvents: 'none',
+                      }} />
+                    ) : null)}
+
+                    {/* Today vertical line */}
+                    {todayOffset >= 0 && todayOffset < totalDays && (
+                      <div style={{
+                        position: 'absolute',
+                        left: todayOffset * DAY_W + DAY_W / 2,
+                        top: 0, bottom: 0, width: 1.5,
+                        background: p.coral, opacity: 0.5, pointerEvents: 'none',
+                      }} />
+                    )}
+
+                    {/* Bar */}
+                    <div
+                      onMouseEnter={e => setTooltip({ item, x: e.clientX, y: e.clientY })}
+                      onMouseLeave={() => setTooltip(null)}
+                      style={{
+                        position: 'absolute',
+                        left: barStart * DAY_W + 2,
+                        top: ROW_H / 2 - 10,
+                        width: Math.max(DAY_W - 4, barLen * DAY_W - 4),
+                        height: 20,
+                        borderRadius: 6,
+                        background: isDone
+                          ? `${barColor}40`
+                          : `linear-gradient(90deg, ${barColor}CC, ${barColor}88)`,
+                        border: `1px solid ${barColor}60`,
+                        cursor: 'default',
+                        boxShadow: p.glow && !isDone ? `0 0 10px ${barColor}30` : 'none',
+                        display: 'flex', alignItems: 'center',
+                        paddingLeft: 6, overflow: 'hidden',
+                        transition: 'opacity 0.15s',
+                      }}
+                    >
+                      {barLen >= 3 && (
+                        <span style={{
+                          fontSize: 9, fontFamily: "'JetBrains Mono',monospace",
+                          color: '#fff', fontWeight: 700, whiteSpace: 'nowrap',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                          opacity: 0.85,
+                        }}>
+                          {item.action.length > barLen * 2 ? item.action.slice(0, barLen * 2 - 1) + '…' : item.action}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* ETA diamond */}
+                    <div style={{
+                      position: 'absolute',
+                      left: (barStart + barLen) * DAY_W - 5,
+                      top: ROW_H / 2 - 6,
+                      width: 12, height: 12,
+                      background: barColor,
+                      transform: 'rotate(45deg)',
+                      borderRadius: 2,
+                      boxShadow: p.glow ? `0 0 8px ${barColor}` : 'none',
+                      zIndex: 2,
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Today label at bottom */}
+            {todayOffset >= 0 && todayOffset < totalDays && (
+              <div style={{
+                position: 'absolute',
+                left: LABEL_W + todayOffset * DAY_W + DAY_W / 2 - 20,
+                bottom: 6, zIndex: 4,
+                fontSize: 9, fontFamily: "'JetBrains Mono',monospace",
+                fontWeight: 700, color: p.coral, letterSpacing: '0.06em',
+              }}>
+                TODAY
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 10,
+          background: p.dropdownBg, border: `1px solid ${p.border}`,
+          borderRadius: 10, padding: '10px 14px', zIndex: 9999,
+          pointerEvents: 'none', minWidth: 180,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: p.textPrimary,
+            fontFamily: "'Space Grotesk',sans-serif", marginBottom: 6, lineHeight: 1.3 }}>
+            {tooltip.item.action}
+          </div>
+          {[
+            ['Type',     tooltip.item.type],
+            ['Assignee', tooltip.item.assignee || '—'],
+            ['Start',    fmtDate(tooltip.item.startDate ?? '')],
+            ['ETA',      fmtDate(tooltip.item.eta)],
+            ['Status',   tooltip.item.status],
+            ['Priority', tooltip.item.priority],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
+              <span style={{ fontSize: 10, color: p.textMuted,
+                fontFamily: "'JetBrains Mono',monospace", minWidth: 52 }}>{k}</span>
+              <span style={{ fontSize: 10, color: p.textBody,
+                fontFamily: "'Inter',sans-serif" }}>{v}</span>
+            </div>
           ))}
-
-          {/* "Today" line */}
-          <line x1={labelW} y1={28} x2={labelW} y2={svgHeight - 4} stroke={p.coral} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
-          <text x={labelW + 4} y={22} fill={p.coral} fontSize={9} fontFamily="JetBrains Mono,monospace">TODAY</text>
-
-          {/* Bars */}
-          {projects.map((proj, i) => {
-            const cy = 48 + i * rowH;
-            const days = daysFromNow(proj.goLiveDate);
-            const hc = healthColor(proj.health);
-            const barColor = PROJECT_COLORS[i % PROJECT_COLORS.length];
-            const barEnd = xForDays(days);
-            const barStart = labelW;
-            const barW = Math.max(4, barEnd - barStart);
-            const overdue = days < 0;
-
-            return (
-              <g key={proj.id}>
-                {/* Label */}
-                <text
-                  x={labelW - 10}
-                  y={cy + 5}
-                  fill={p.textBody}
-                  fontSize={11}
-                  fontFamily="Inter,sans-serif"
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                >
-                  {proj.name.length > 20 ? proj.name.slice(0, 20) + '…' : proj.name}
-                </text>
-
-                {/* Bar track */}
-                <rect
-                  x={labelW}
-                  y={cy - 8}
-                  width={barAreaW}
-                  height={16}
-                  rx={8}
-                  fill={p.inputBg}
-                />
-
-                {/* Bar fill */}
-                {!overdue && (
-                  <rect
-                    x={barStart}
-                    y={cy - 7}
-                    width={barW}
-                    height={14}
-                    rx={7}
-                    fill={barColor}
-                    opacity={0.75}
-                  />
-                )}
-
-                {/* Overdue bar (full width, red) */}
-                {overdue && (
-                  <rect
-                    x={barStart}
-                    y={cy - 7}
-                    width={barAreaW}
-                    height={14}
-                    rx={7}
-                    fill={p.coral}
-                    opacity={0.35}
-                  />
-                )}
-
-                {/* Go-live diamond marker */}
-                <polygon
-                  points={`${barEnd},${cy - 9} ${barEnd + 6},${cy} ${barEnd},${cy + 9} ${barEnd - 6},${cy}`}
-                  fill={hc}
-                  style={{ filter: p.glow ? `drop-shadow(0 0 5px ${hc})` : 'none' }}
-                />
-
-                {/* Days label */}
-                <text
-                  x={Math.min(barEnd + 14, svgWidth - 4)}
-                  y={cy + 5}
-                  fill={hc}
-                  fontSize={10}
-                  fontFamily="JetBrains Mono,monospace"
-                  dominantBaseline="middle"
-                >
-                  {overdue ? `${Math.abs(days)}d late` : `${days}d`}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        </div>
       )}
     </div>
   );
@@ -749,7 +956,7 @@ export default function DashboardPage() {
           <GoLiveCalendar projects={state.projects} />
         </div>
 
-        <GanttChart projects={state.projects} />
+        <GanttChart projects={state.projects} actions={projectActions} />
 
         <RecentActivityFeed activities={projectActivities} />
 

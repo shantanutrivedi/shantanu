@@ -2,6 +2,7 @@ export interface ActionItem {
   id: string;
   action: string;
   assignee: string;
+  startDate: string;   // when work begins (defaults to today when logged)
   eta: string;
   product: string;
   projectId?: string;
