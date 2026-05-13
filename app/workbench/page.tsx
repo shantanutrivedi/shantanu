@@ -629,7 +629,7 @@ function MeetingsPanel() {
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [events, setEvents] = useState<CalEvent[]>([]);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_token'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_token' | 'token_expired'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -639,6 +639,7 @@ function MeetingsPanel() {
       const res = await fetch(`/api/calendar/events?date=${date}`);
       const data = await res.json();
       if (res.status === 403 && data.error === 'no_token') { setStatus('no_token'); return; }
+      if (res.status === 403 && data.error === 'token_expired') { setStatus('token_expired'); return; }
       if (!res.ok) { setStatus('error'); setErrorMsg(data.detail?.error?.message ?? data.error ?? 'Unknown error'); return; }
       setEvents(data.events ?? []);
       setStatus('done');
@@ -691,11 +692,13 @@ function MeetingsPanel() {
       </div>
 
       {/* States */}
-      {status === 'no_token' && (
+      {(status === 'no_token' || status === 'token_expired') && (
         <div style={{ padding: '16px 0', textAlign: 'center' }}>
-          <div style={{ fontSize: 20, marginBottom: 8 }}>🔐</div>
+          <div style={{ fontSize: 20, marginBottom: 8 }}>{status === 'token_expired' ? '🔄' : '🔐'}</div>
           <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6, marginBottom: 10 }}>
-            Grant calendar access to see your meetings
+            {status === 'token_expired'
+              ? 'Calendar session expired — please reconnect'
+              : 'Grant calendar access to see your meetings'}
           </div>
           <button
             onClick={() => signIn('google', { callbackUrl: '/workbench' })}
@@ -706,7 +709,7 @@ function MeetingsPanel() {
               border: 'none', cursor: 'pointer',
             }}
           >
-            Authorize Calendar
+            {status === 'token_expired' ? 'Reconnect Calendar' : 'Authorize Calendar'}
           </button>
         </div>
       )}
@@ -974,7 +977,19 @@ export default function WorkbenchPage() {
   }, [rawText, filename]);
 
   const handleEditItem = useCallback((id: string, col: ColKey, value: string) => {
-    setParsedItems(prev => prev.map(item => item.id === id ? { ...item, [col]: value } : item));
+    setParsedItems(prev => {
+      const next = prev.map(item => item.id === id ? { ...item, [col]: value } : item);
+      // Auto-persist edit if this item already lives in saved actionItems
+      const state = loadState();
+      if (state.actionItems.some(a => a.id === id)) {
+        const updated = {
+          ...state,
+          actionItems: state.actionItems.map(a => a.id === id ? { ...a, [col]: value } : a),
+        };
+        saveState(updated);
+      }
+      return next;
+    });
     setSaved(false);
   }, []);
 
@@ -986,6 +1001,11 @@ export default function WorkbenchPage() {
   const handleDeleteRow = useCallback((id: string) => {
     setParsedItems(prev => prev.filter(item => item.id !== id));
     setDuplicates(prev => prev.filter(d => d.incoming.id !== id));
+    // Also remove from saved actionItems if it exists there
+    const state = loadState();
+    if (state.actionItems.some(a => a.id === id)) {
+      saveState({ ...state, actionItems: state.actionItems.filter(a => a.id !== id) });
+    }
     setSaved(false);
   }, []);
 
@@ -1251,7 +1271,13 @@ export default function WorkbenchPage() {
                             onClick={() => {
                               setFilename(upload.filename);
                               setRawText(upload.rawText);
-                              setParsedItems(v.parsedItems);
+                              // Merge saved actionItems data so post-save inline edits aren't lost
+                              const savedItems = loadState().actionItems;
+                              const savedById = new Map(savedItems.map(a => [a.id, a]));
+                              const merged = v.parsedItems.map(item =>
+                                savedById.has(item.id) ? savedById.get(item.id)! : item
+                              );
+                              setParsedItems(merged);
                               setSaved(true);
                               setParseError('');
                               setDuplicates([]);
