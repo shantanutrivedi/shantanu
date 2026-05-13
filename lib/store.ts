@@ -17,21 +17,39 @@ export function onUserChange(fn: Listener): () => void {
 export function setCurrentUser(id: string) {
   if (id === _userId) return;
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && id !== 'guest') {
     const userKey = `shantanu_state_${id}`;
     try {
       const userRaw = localStorage.getItem(userKey);
+
       if (!userRaw) {
-        // Migration priority: original key → guest-suffixed key
+        // First time this user — migrate from any legacy / guest key
         const legacy = localStorage.getItem('shantanu_state') ||
                        localStorage.getItem('shantanu_state_guest');
         if (legacy) localStorage.setItem(userKey, legacy);
+      } else {
+        // Key already exists — but merge in any richer legacy data so items
+        // saved before auth was wired up aren't silently lost
+        const candidateKeys = ['shantanu_state', 'shantanu_state_guest'];
+        for (const ck of candidateKeys) {
+          const raw = localStorage.getItem(ck);
+          if (!raw) continue;
+          try {
+            const legacy = JSON.parse(raw) as AppState;
+            const current = JSON.parse(userRaw) as AppState;
+            // Only copy items the current state doesn't already have
+            const currentIds = new Set(current.actionItems.map((a: ActionItem) => a.id));
+            const newItems = (legacy.actionItems || []).filter((a: ActionItem) => !currentIds.has(a.id));
+            if (newItems.length > 0) {
+              current.actionItems = [...current.actionItems, ...newItems];
+              localStorage.setItem(userKey, JSON.stringify(current));
+            }
+          } catch {}
+        }
       }
     } catch {}
 
-    if (id !== 'guest') {
-      try { localStorage.setItem(LAST_USER_KEY, id); } catch {}
-    }
+    try { localStorage.setItem(LAST_USER_KEY, id); } catch {}
   }
 
   _userId = id;
@@ -74,11 +92,14 @@ function setKey(key: string, value: string) {
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
+const TODAY_ISO = new Date().toISOString().split('T')[0];
+
 export function loadState(): AppState {
   const raw = getKey(stateKey());
   if (raw) {
     try {
       const state = JSON.parse(raw) as AppState;
+
       // Deduplicate by id to fix any double-save accumulation
       const seenActions = new Set<string>();
       state.actionItems = (state.actionItems || []).filter(a => {
@@ -86,12 +107,24 @@ export function loadState(): AppState {
         seenActions.add(a.id);
         return true;
       });
+
+      // Backfill startDate on items saved before the field was added
+      let dirty = false;
+      state.actionItems = state.actionItems.map(a => {
+        if (!a.startDate) { dirty = true; return { ...a, startDate: TODAY_ISO }; }
+        return a;
+      });
+
       const seenActs = new Set<string>();
       state.activities = (state.activities || []).filter(a => {
         if (seenActs.has(a.id)) return false;
         seenActs.add(a.id);
         return true;
       });
+
+      // Persist the backfilled data so it survives future loads
+      if (dirty) setKey(stateKey(), JSON.stringify(state));
+
       return state;
     } catch {}
   }

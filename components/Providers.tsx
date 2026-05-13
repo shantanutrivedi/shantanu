@@ -9,6 +9,9 @@ function SessionInit() {
     if (status === 'loading') return;
     if (session?.user?.id) {
       setCurrentUser(session.user.id);
+    } else if (status === 'unauthenticated') {
+      // Reset to guest so stateKey() falls back to LAST_USER_KEY correctly
+      setCurrentUser('guest');
     }
   }, [session?.user?.id, status]);
   return null;
