@@ -622,16 +622,39 @@ export default function WorkbenchPage() {
     return unsub;
   }, []);
 
-  const readFile = useCallback((file: File) => {
-    if (!file.name.endsWith('.txt')) { setParseError('Only .txt files are supported.'); return; }
+  const SUPPORTED_EXTS = new Set(['txt','md','pdf','doc','docx','xlsx','xls','csv','json']);
+
+  const readFile = useCallback(async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (!SUPPORTED_EXTS.has(ext)) {
+      setParseError(`Unsupported file type .${ext}. Supported: TXT, MD, PDF, DOC, DOCX, XLSX, XLS, CSV, JSON`);
+      return;
+    }
     setParseError('');
     setParsedItems([]);
     setDuplicates([]);
     setShowResolver(false);
     setSaved(false);
-    const reader = new FileReader();
-    reader.onload = e => { setRawText((e.target?.result as string) || ''); setFilename(file.name); };
-    reader.readAsText(file);
+    setFilename(file.name);
+
+    if (ext === 'txt' || ext === 'md') {
+      const reader = new FileReader();
+      reader.onload = e => setRawText((e.target?.result as string) || '');
+      reader.readAsText(file);
+    } else {
+      // Server-side extraction for binary/structured formats
+      setRawText('');
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const res = await fetch('/api/extract-text', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.error) { setParseError(data.error); return; }
+        setRawText(data.text ?? '');
+      } catch {
+        setParseError('Failed to extract text from file.');
+      }
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -852,13 +875,13 @@ export default function WorkbenchPage() {
             <div style={{ fontSize:32, marginBottom:10 }}>📄</div>
             <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, fontSize:15,
               color: dragging ? p.violet : p.textPrimary, marginBottom:6 }}>
-              {dragging ? 'Drop to upload' : 'Drag & drop a .txt file'}
+              {dragging ? 'Drop to upload' : 'Drag & drop your meeting file'}
             </div>
             <div style={{ fontFamily:"'Inter',sans-serif", fontSize:12, color: p.textMuted }}>
-              or click to browse — .txt files only
+              or click to browse — PDF, DOCX, XLSX, TXT, JSON and more
             </div>
           </div>
-          <input ref={fileRef} type="file" accept=".txt" style={{ display:'none' }} onChange={handleFileInput} />
+          <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.doc,.docx,.xlsx,.xls,.csv,.json" style={{ display:'none' }} onChange={handleFileInput} />
 
           {parseError && (
             <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10,

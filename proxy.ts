@@ -14,9 +14,9 @@ export default auth((req) => {
   if (!isAuth && !isPublic) {
     return NextResponse.redirect(new URL('/', nextUrl));
   }
-  // Authenticated users visiting sign-in page go to dashboard
+  // Authenticated users visiting sign-in page go to home
   if (isAuth && nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', nextUrl));
+    return NextResponse.redirect(new URL('/home', nextUrl));
   }
   return NextResponse.next();
 })

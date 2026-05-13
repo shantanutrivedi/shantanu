@@ -202,6 +202,118 @@ function AISection({ userId }: { userId: string }) {
   );
 }
 
+// ── Meeting connector card (Google Meet / Zoom) ───────────────────────────────
+
+function MeetingConnectorCard({ name, icon, description, configKey }: {
+  name: string; icon: string; description: string; configKey: string;
+}) {
+  const p = usePalette();
+  const inputStyle = useInputStyle();
+  const [expanded, setExpanded] = useState(false);
+  const [accountId, setAccountId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`meeting-${configKey}`);
+      if (raw) { const c = JSON.parse(raw); setAccountId(c.accountId ?? ''); setClientId(c.clientId ?? ''); setClientSecret(c.clientSecret ?? ''); }
+    } catch {}
+  }, [configKey]);
+
+  function save() {
+    localStorage.setItem(`meeting-${configKey}`, JSON.stringify({ accountId, clientId, clientSecret }));
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace",
+    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block',
+  };
+
+  return (
+    <div style={{
+      background: p.cardBg, border: `1px solid ${p.border}`,
+      borderRadius: 14, overflow: 'hidden', marginTop: 16,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '18px 24px', cursor: 'pointer',
+      }} onClick={() => setExpanded(e => !e)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: `${p.inputBg}`, border: `1px solid ${p.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+          }}>{icon}</div>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary }}>
+              {name}
+            </div>
+            <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", marginTop: 2 }}>
+              {description}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontSize: 10, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700,
+            padding: '3px 8px', borderRadius: 100, letterSpacing: '0.06em',
+            background: `${p.amber}15`, color: p.amber, border: `1px solid ${p.amber}30`,
+          }}>COMING SOON</span>
+          <span style={{ color: p.textMuted, fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: '0 24px 24px', borderTop: `1px solid ${p.borderTint}` }}>
+          <div style={{ paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{
+              padding: '12px 16px', borderRadius: 10,
+              background: `${p.violet}10`, border: `1px solid ${p.violet}25`,
+              fontSize: 12, color: p.textBody, fontFamily: "'Inter',sans-serif", lineHeight: 1.6,
+            }}>
+              To connect {name}, you&apos;ll need to create an OAuth app in your {name} developer console and paste the credentials below. Transcript fetching will be enabled once connected.
+            </div>
+            <div>
+              <label style={labelStyle}>Account / Workspace ID</label>
+              <input style={inputStyle} value={accountId} onChange={e => setAccountId(e.target.value)} placeholder={`Your ${name} account ID`} />
+            </div>
+            <div>
+              <label style={labelStyle}>OAuth Client ID</label>
+              <input style={inputStyle} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="Client ID" />
+            </div>
+            <div>
+              <label style={labelStyle}>OAuth Client Secret</label>
+              <input style={{ ...inputStyle, fontFamily: "'JetBrains Mono',monospace" }} type="password"
+                value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Client secret" />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={save} style={{
+                padding: '9px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                color: '#EEEDFE', cursor: 'pointer',
+                background: 'linear-gradient(135deg,#534AB7,#7F77DD)', border: 'none',
+                fontFamily: "'Space Grotesk',sans-serif",
+              }}>
+                {saved ? 'Saved ✓' : 'Save Credentials'}
+              </button>
+              <button disabled style={{
+                padding: '9px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                color: p.textMuted, cursor: 'not-allowed',
+                background: p.inputBg, border: `1px solid ${p.border}`,
+                fontFamily: "'Space Grotesk',sans-serif", opacity: 0.6,
+              }}>
+                Connect (coming soon)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Connectors section (Jira) ─────────────────────────────────────────────────
 
 function ConnectorsSection({ userId }: { userId: string }) {
@@ -365,6 +477,22 @@ function ConnectorsSection({ userId }: { userId: string }) {
           </button>
         </div>
       </div>
+
+      {/* Google Meet connector */}
+      <MeetingConnectorCard
+        name="Google Meet"
+        icon="🎙️"
+        description="Auto-fetch transcripts from Google Meet recordings to generate action items."
+        configKey="google-meet"
+      />
+
+      {/* Zoom connector */}
+      <MeetingConnectorCard
+        name="Zoom"
+        icon="📹"
+        description="Connect Zoom to pull meeting transcripts and auto-populate Workbench."
+        configKey="zoom"
+      />
 
       {/* Future connectors placeholder */}
       <div style={{
