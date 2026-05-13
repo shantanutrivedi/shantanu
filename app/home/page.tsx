@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { usePalette } from '@/lib/palette';
 import { loadState, saveState, onUserChange } from '@/lib/store';
+import { useWeather } from '@/lib/useWeather';
+import WeatherIcon from '@/components/WeatherIcon';
 import type { Project } from '@/lib/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -14,6 +16,32 @@ function greeting(): string {
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
+}
+
+// Split name into two halves — first half textPrimary, second half violet
+// mirrors the SHAN/TANU logo pattern
+function TwoColorName({ name, size, primaryColor, accentColor }: {
+  name: string; size: number; primaryColor: string; accentColor: string;
+}) {
+  const upper = name.toUpperCase();
+  const split = Math.ceil(upper.length / 2);
+  const first = upper.slice(0, split);
+  const second = upper.slice(split);
+  return (
+    <span style={{
+      fontFamily: "'Space Grotesk',sans-serif",
+      fontWeight: 900, fontSize: size,
+      letterSpacing: '-2px', lineHeight: 1,
+    }}>
+      <span style={{ color: primaryColor }}>{first}</span>
+      <span style={{ color: accentColor }}>{second}</span>
+      <span style={{
+        display: 'inline-block', width: Math.max(6, size * 0.12), height: Math.max(6, size * 0.12),
+        borderRadius: '50%', background: '#F0997B',
+        marginLeft: 3, verticalAlign: 'super', flexShrink: 0,
+      }} />
+    </span>
+  );
 }
 
 const HEALTH_COLORS: Record<Project['health'], { bg: string; fg: string; label: string }> = {
@@ -263,7 +291,7 @@ export default function HomePage() {
   const { data: session } = useSession();
   const router = useRouter();
   const p = usePalette();
-  const dark = p.glow;
+  const weather = useWeather();
 
   const [appState, setAppState] = useState(() => loadState());
   const [showModal, setShowModal] = useState(false);
@@ -301,66 +329,93 @@ export default function HomePage() {
     <div style={{
       minHeight: 'calc(100vh - 64px)',
       background: p.pageBg,
-      padding: '52px 40px 80px',
+      padding: '48px 40px 80px',
       maxWidth: 1200, margin: '0 auto',
     }}>
 
-      {/* Greeting + avatar */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 52 }}>
-        <div>
-          {/* Greeting line */}
-          <div style={{
-            fontSize: 13, fontFamily: "'JetBrains Mono',monospace",
-            color: p.violet, letterSpacing: '0.04em', marginBottom: 8,
-            textTransform: 'uppercase',
-          }}>
-            {greet},
-          </div>
+      {/* ── iOS-style greeting card ───────────────────────────────────────── */}
+      <div style={{
+        background: p.glow
+          ? 'linear-gradient(135deg, rgba(83,74,183,0.14) 0%, rgba(28,28,36,0.7) 60%)'
+          : 'rgba(255,255,255,0.85)',
+        border: `1.5px solid ${p.glow ? 'rgba(139,124,255,0.25)' : 'rgba(83,74,183,0.12)'}`,
+        borderRadius: 28,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        padding: '28px 32px',
+        marginBottom: 48,
+        boxShadow: p.glow
+          ? '0 8px 40px rgba(83,74,183,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
+          : '0 4px 24px rgba(83,74,183,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
+        display: 'flex', alignItems: 'center', gap: 24,
+      }}>
 
-          {/* Name in brand typography */}
-          <div style={{
-            fontFamily: "'Space Grotesk',sans-serif",
-            fontWeight: 900, fontSize: 54,
-            letterSpacing: '-2.5px', lineHeight: 1,
-            color: p.textPrimary,
-          }}>
-            {firstName.toUpperCase().split('').map((ch, i) => (
-              <span key={i} style={{
-                color: i === 0 ? p.textPrimary : (i % 3 === 0 ? p.coral : i % 3 === 1 ? p.violet : p.textPrimary),
-              }}>{ch}</span>
-            ))}
-            <span style={{
-              display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-              background: p.coral, marginLeft: 4, verticalAlign: 'super', flexShrink: 0,
-            }} />
-          </div>
-
-          <div style={{
-            fontSize: 16, color: p.textMuted, fontFamily: "'Inter',sans-serif",
-            marginTop: 10, fontWeight: 400,
-          }}>
-            Which project do you want to dive into today?
-          </div>
-        </div>
-
-        {/* User avatar */}
+        {/* Avatar — left side */}
         {user?.image ? (
           <img
             src={user.image}
             alt={user.name ?? 'User'}
-            style={{ width: 64, height: 64, borderRadius: '50%', border: `2px solid ${p.violet}40` }}
+            style={{
+              width: 72, height: 72, borderRadius: '50%', flexShrink: 0,
+              border: `2.5px solid ${p.glow ? 'rgba(139,124,255,0.5)' : 'rgba(83,74,183,0.25)'}`,
+              boxShadow: p.glow ? '0 0 20px rgba(139,124,255,0.25)' : '0 2px 12px rgba(0,0,0,0.12)',
+            }}
           />
         ) : (
           <div style={{
-            width: 64, height: 64, borderRadius: '50%',
+            width: 72, height: 72, borderRadius: '50%', flexShrink: 0,
             background: 'linear-gradient(135deg,#534AB7,#7F77DD)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 24, fontWeight: 700, color: '#EEEDFE',
+            fontSize: 28, fontWeight: 700, color: '#EEEDFE',
             fontFamily: "'Space Grotesk',sans-serif",
+            boxShadow: p.glow ? '0 0 20px rgba(139,124,255,0.3)' : '0 2px 12px rgba(0,0,0,0.15)',
           }}>
             {firstName[0]?.toUpperCase()}
           </div>
         )}
+
+        {/* Right: greeting text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* "Good afternoon" + weather icon in a single row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+          }}>
+            <span style={{
+              fontSize: 13, fontFamily: "'JetBrains Mono',monospace",
+              color: p.violet, letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>
+              {greet}
+            </span>
+            {weather && (
+              <>
+                <WeatherIcon icon={weather.icon} size={22} />
+                {weather.temp !== 0 && (
+                  <span style={{
+                    fontSize: 12, fontFamily: "'JetBrains Mono',monospace",
+                    color: p.textMuted,
+                  }}>
+                    {weather.temp}{weather.unit}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Name: first half textPrimary, second half violet — like SHAN/TANU */}
+          <TwoColorName
+            name={firstName}
+            size={46}
+            primaryColor={p.textPrimary}
+            accentColor={p.violet}
+          />
+
+          <div style={{
+            fontSize: 14, color: p.textMuted, fontFamily: "'Inter',sans-serif",
+            marginTop: 8, fontWeight: 400, lineHeight: 1.4,
+          }}>
+            Which project do you want to dive into today?
+          </div>
+        </div>
       </div>
 
       {/* My Projects */}

@@ -597,6 +597,275 @@ function DuplicateResolver({ pairs, onDelete, onMerge, onDismiss }: {
   );
 }
 
+// ── Meetings panel ────────────────────────────────────────────────────────────
+
+type CalEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  meetLink: string | null;
+  description: string;
+  attendees: string[];
+};
+
+function fmtTime(iso: string): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  } catch { return '—'; }
+}
+
+function MeetingsPanel() {
+  const p = usePalette();
+  const today = new Date().toISOString().split('T')[0];
+
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_token' | 'unconfigured'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Check if any meeting connector is configured
+  const googleCfg = typeof window !== 'undefined'
+    ? (() => { try { return JSON.parse(localStorage.getItem('meeting-google-meet') ?? '{}'); } catch { return {}; } })()
+    : {};
+  const zoomCfg = typeof window !== 'undefined'
+    ? (() => { try { return JSON.parse(localStorage.getItem('meeting-zoom') ?? '{}'); } catch { return {}; } })()
+    : {};
+  const isConfigured = !!(googleCfg?.clientId || zoomCfg?.clientId);
+
+  const fetchEvents = useCallback(async (date: string) => {
+    setStatus('loading'); setEvents([]);
+    try {
+      const res = await fetch(`/api/calendar/events?date=${date}`);
+      const data = await res.json();
+      if (res.status === 403 && data.error === 'no_token') { setStatus('no_token'); return; }
+      if (!res.ok) { setStatus('error'); setErrorMsg(data.detail?.error?.message ?? data.error ?? 'Unknown error'); return; }
+      setEvents(data.events ?? []);
+      setStatus('done');
+    } catch {
+      setStatus('error'); setErrorMsg('Network error');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isConfigured) fetchEvents(selectedDate);
+    else setStatus('unconfigured');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConfigured]);
+
+  function handleDateChange(d: string) {
+    setSelectedDate(d);
+    fetchEvents(d);
+  }
+
+  const cardStyle: React.CSSProperties = {
+    background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 16, padding: 20,
+  };
+
+  const dot = (color: string) => (
+    <span style={{ width: 7, height: 7, borderRadius: '50%', background: color,
+      boxShadow: p.glow ? `0 0 8px ${color}` : 'none', display: 'inline-block', flexShrink: 0 }} />
+  );
+
+  return (
+    <div style={cardStyle}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {dot(p.cyan)}
+          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600,
+            fontSize: 15, color: p.textPrimary }}>
+            Meetings
+          </span>
+        </div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={e => handleDateChange(e.target.value)}
+          style={{
+            background: p.inputBg, border: `1px solid ${p.border}`,
+            borderRadius: 8, padding: '4px 10px', fontSize: 11,
+            color: p.textPrimary, fontFamily: "'JetBrains Mono',monospace",
+            outline: 'none', colorScheme: p.glow ? 'dark' : 'light',
+          }}
+        />
+      </div>
+
+      {/* States */}
+      {status === 'unconfigured' && (
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, marginBottom: 8 }}>📅</div>
+          <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+            Configure Google Meet or Zoom in<br />
+            <a href="/settings" style={{ color: p.violet, textDecoration: 'none', fontWeight: 600 }}>
+              Settings → Connectors
+            </a>
+          </div>
+        </div>
+      )}
+
+      {status === 'no_token' && (
+        <div style={{ padding: '16px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 20, marginBottom: 8 }}>🔐</div>
+          <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6, marginBottom: 10 }}>
+            Sign in again to grant calendar access
+          </div>
+          <a href="/api/auth/signin" style={{
+            display: 'inline-block', padding: '7px 16px', borderRadius: 8,
+            background: 'linear-gradient(135deg,#534AB7,#7F77DD)', color: '#EEEDFE',
+            fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            Authorize Calendar
+          </a>
+        </div>
+      )}
+
+      {status === 'loading' && (
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <div style={{ width: 20, height: 20, borderRadius: '50%',
+            border: `2px solid ${p.borderTint}`, borderTopColor: p.violet,
+            animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div style={{ padding: '12px', borderRadius: 10, background: `${p.coral}12`,
+          border: `1px solid ${p.coral}30`, fontSize: 12, color: p.coral,
+          fontFamily: "'JetBrains Mono',monospace" }}>
+          {errorMsg || 'Failed to load meetings'}
+        </div>
+      )}
+
+      {status === 'done' && events.length === 0 && (
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, marginBottom: 6 }}>☕</div>
+          <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif" }}>
+            No meetings on this day
+          </div>
+        </div>
+      )}
+
+      {status === 'done' && events.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {events.map(ev => {
+            const expanded = expandedId === ev.id;
+            return (
+              <div key={ev.id} style={{
+                borderRadius: 12, border: `1px solid ${expanded ? p.violet + '50' : p.borderTint}`,
+                background: expanded ? `${p.violet}07` : p.rowBg,
+                overflow: 'hidden', transition: 'border-color 0.15s',
+              }}>
+                <div
+                  style={{ padding: '11px 14px', cursor: 'pointer' }}
+                  onClick={() => setExpandedId(expanded ? null : ev.id)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600,
+                        fontSize: 13, color: p.textPrimary, lineHeight: 1.3,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ev.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", marginTop: 3 }}>
+                        {fmtTime(ev.start)} – {fmtTime(ev.end)}
+                      </div>
+                    </div>
+                    {ev.meetLink && (
+                      <a href={ev.meetLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                        style={{
+                          padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                          background: `${p.cyan}18`, border: `1px solid ${p.cyan}40`, color: p.cyan,
+                          fontFamily: "'JetBrains Mono',monospace", textDecoration: 'none',
+                          flexShrink: 0,
+                        }}>
+                        Join
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {expanded && (
+                  <div style={{ borderTop: `1px solid ${p.borderTint}`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {ev.attendees.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace",
+                          textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>
+                          Attendees
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {ev.attendees.slice(0, 6).map((a, i) => (
+                            <span key={i} style={{
+                              fontSize: 10, padding: '2px 8px', borderRadius: 100,
+                              background: p.inputBg, border: `1px solid ${p.borderTint}`,
+                              color: p.textBody, fontFamily: "'Inter',sans-serif",
+                            }}>{a}</span>
+                          ))}
+                          {ev.attendees.length > 6 && (
+                            <span style={{ fontSize: 10, color: p.textMuted, padding: '2px 0' }}>
+                              +{ev.attendees.length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Transcript from description — Google Meet auto-links transcripts here */}
+                    {ev.description && (
+                      <div>
+                        <div style={{ fontSize: 9, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace",
+                          textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>
+                          Notes / Transcript
+                        </div>
+                        <div style={{
+                          fontSize: 11, color: p.textBody, fontFamily: "'Inter',sans-serif",
+                          lineHeight: 1.6, maxHeight: 120, overflowY: 'auto',
+                          background: p.inputBg, borderRadius: 8, padding: '8px 10px',
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}
+                          dangerouslySetInnerHTML={{
+                            __html: ev.description
+                              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                              .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#7F77DD">$1</a>'),
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Import transcript as MOM file */}
+                    {ev.description && (
+                      <button
+                        onClick={() => {
+                          const text = ev.description.replace(/<[^>]+>/g,'');
+                          const blob = new Blob([text], { type: 'text/plain' });
+                          const file = new File([blob], `${ev.title.replace(/\s+/g,'-')}.txt`, { type: 'text/plain' });
+                          const dt = new DataTransfer(); dt.items.add(file);
+                          const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+                          if (input) { input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); }
+                        }}
+                        style={{
+                          padding: '7px 14px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                          background: `${p.violet}18`, border: `1px solid ${p.violet}40`,
+                          color: p.violet, cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
+                          alignSelf: 'flex-start',
+                        }}
+                      >
+                        ✦ Use as MOM
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function WorkbenchPage() {
@@ -924,7 +1193,8 @@ export default function WorkbenchPage() {
           )}
         </div>
 
-        {/* Recent Uploads — grouped with version history */}
+        {/* Right column: Recent Uploads + Meetings stacked */}
+        <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
         <div style={cardStyle}>
           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, fontSize:15,
             color: p.textPrimary, marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
@@ -1035,6 +1305,10 @@ export default function WorkbenchPage() {
             </div>
           )}
         </div>
+
+        {/* Meetings panel */}
+        <MeetingsPanel />
+        </div>{/* end right column wrapper */}
       </div>
 
       {/* Action Table */}
