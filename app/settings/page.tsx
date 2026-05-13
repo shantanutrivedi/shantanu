@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { loadState, saveState } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import {
@@ -202,35 +202,131 @@ function AISection({ userId }: { userId: string }) {
   );
 }
 
-// ── Meeting connector card (Google Meet / Zoom) ───────────────────────────────
+// ── Google Meet connector card ────────────────────────────────────────────────
 
-function MeetingConnectorCard({ name, icon, description, configKey }: {
-  name: string; icon: string; description: string; configKey: string;
-}) {
+function GoogleMeetCard() {
   const p = usePalette();
-  const inputStyle = useInputStyle();
+  const { data: session } = useSession();
   const [expanded, setExpanded] = useState(false);
-  const [accountId, setAccountId] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`meeting-${configKey}`);
-      if (raw) { const c = JSON.parse(raw); setAccountId(c.accountId ?? ''); setClientId(c.clientId ?? ''); setClientSecret(c.clientSecret ?? ''); }
-    } catch {}
-  }, [configKey]);
+  const connected = !!session;
 
-  function save() {
-    localStorage.setItem(`meeting-${configKey}`, JSON.stringify({ accountId, clientId, clientSecret }));
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  async function handleConnect() {
+    setConnecting(true);
+    // Force Google re-consent so the calendar.readonly scope is granted
+    await signIn('google', { callbackUrl: '/workbench' });
   }
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace",
-    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block',
-  };
+  return (
+    <div style={{
+      background: p.cardBg, border: `1px solid ${connected ? p.lime + '50' : p.border}`,
+      borderRadius: 14, overflow: 'hidden', marginTop: 16,
+    }}>
+      {/* Header row */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '18px 24px', cursor: 'pointer',
+      }} onClick={() => setExpanded(e => !e)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: p.inputBg, border: `1px solid ${p.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+          }}>🎙️</div>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary }}>
+              Google Meet
+            </div>
+            <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", marginTop: 2 }}>
+              Fetch today&apos;s meetings from Google Calendar and load transcripts into Workbench
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Live status badge */}
+          <span style={{
+            fontSize: 10, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700,
+            padding: '3px 8px', borderRadius: 100, letterSpacing: '0.06em',
+            background: connected ? `${p.lime}18` : `${p.amber}15`,
+            color: connected ? p.lime : p.amber,
+            border: `1px solid ${connected ? p.lime + '40' : p.amber + '30'}`,
+          }}>
+            {connected ? 'CONNECTED' : 'NOT CONNECTED'}
+          </span>
+          <span style={{ color: p.textMuted, fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: '0 24px 24px', borderTop: `1px solid ${p.borderTint}` }}>
+          <div style={{ paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {connected ? (
+              /* Already signed in — show account + re-auth option */
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {session.user?.image && (
+                  <img src={session.user.image} alt="" style={{ width: 36, height: 36, borderRadius: '50%' }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: p.textPrimary,
+                    fontFamily: "'Space Grotesk',sans-serif" }}>
+                    {session.user?.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>
+                    {session.user?.email}
+                  </div>
+                </div>
+                <button onClick={handleConnect} disabled={connecting} style={{
+                  padding: '8px 16px', borderRadius: 9, fontSize: 12, fontWeight: 600,
+                  color: p.violet, cursor: 'pointer',
+                  background: `${p.violet}12`, border: `1px solid ${p.violet}40`,
+                  fontFamily: "'Space Grotesk',sans-serif", opacity: connecting ? 0.7 : 1,
+                }}>
+                  Re-authorize
+                </button>
+              </div>
+            ) : (
+              /* Not signed in */
+              <>
+                <div style={{
+                  padding: '12px 16px', borderRadius: 10,
+                  background: `${p.violet}10`, border: `1px solid ${p.violet}25`,
+                  fontSize: 12, color: p.textBody, fontFamily: "'Inter',sans-serif", lineHeight: 1.6,
+                }}>
+                  Sign in with Google to grant calendar access. Shantanu will read your Google Calendar
+                  events to show upcoming meetings and load transcripts into Workbench.
+                  No data is stored — it&apos;s fetched live each time.
+                </div>
+                <button onClick={handleConnect} disabled={connecting} style={{
+                  padding: '10px 22px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  color: '#EEEDFE', cursor: connecting ? 'not-allowed' : 'pointer',
+                  background: 'linear-gradient(135deg,#534AB7,#7F77DD)', border: 'none',
+                  fontFamily: "'Space Grotesk',sans-serif", alignSelf: 'flex-start',
+                  opacity: connecting ? 0.7 : 1,
+                }}>
+                  {connecting ? 'Redirecting…' : 'Connect with Google'}
+                </button>
+              </>
+            )}
+
+            <div style={{ fontSize: 11, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+              Requires <strong>Google Calendar API</strong> enabled in your Google Cloud Console
+              and the <code style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>calendar.readonly</code> scope
+              added to your OAuth consent screen.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Zoom connector card (coming soon) ─────────────────────────────────────────
+
+function ZoomCard() {
+  const p = usePalette();
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div style={{
@@ -244,15 +340,15 @@ function MeetingConnectorCard({ name, icon, description, configKey }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10,
-            background: `${p.inputBg}`, border: `1px solid ${p.border}`,
+            background: p.inputBg, border: `1px solid ${p.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-          }}>{icon}</div>
+          }}>📹</div>
           <div>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, color: p.textPrimary }}>
-              {name}
+              Zoom
             </div>
             <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", marginTop: 2 }}>
-              {description}
+              Fetch Zoom meetings and cloud recording transcripts into Workbench
             </div>
           </div>
         </div>
@@ -268,45 +364,11 @@ function MeetingConnectorCard({ name, icon, description, configKey }: {
 
       {expanded && (
         <div style={{ padding: '0 24px 24px', borderTop: `1px solid ${p.borderTint}` }}>
-          <div style={{ paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{
-              padding: '12px 16px', borderRadius: 10,
-              background: `${p.violet}10`, border: `1px solid ${p.violet}25`,
-              fontSize: 12, color: p.textBody, fontFamily: "'Inter',sans-serif", lineHeight: 1.6,
-            }}>
-              To connect {name}, you&apos;ll need to create an OAuth app in your {name} developer console and paste the credentials below. Transcript fetching will be enabled once connected.
-            </div>
-            <div>
-              <label style={labelStyle}>Account / Workspace ID</label>
-              <input style={inputStyle} value={accountId} onChange={e => setAccountId(e.target.value)} placeholder={`Your ${name} account ID`} />
-            </div>
-            <div>
-              <label style={labelStyle}>OAuth Client ID</label>
-              <input style={inputStyle} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="Client ID" />
-            </div>
-            <div>
-              <label style={labelStyle}>OAuth Client Secret</label>
-              <input style={{ ...inputStyle, fontFamily: "'JetBrains Mono',monospace" }} type="password"
-                value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Client secret" />
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={save} style={{
-                padding: '9px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                color: '#EEEDFE', cursor: 'pointer',
-                background: 'linear-gradient(135deg,#534AB7,#7F77DD)', border: 'none',
-                fontFamily: "'Space Grotesk',sans-serif",
-              }}>
-                {saved ? 'Saved ✓' : 'Save Credentials'}
-              </button>
-              <button disabled style={{
-                padding: '9px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                color: p.textMuted, cursor: 'not-allowed',
-                background: p.inputBg, border: `1px solid ${p.border}`,
-                fontFamily: "'Space Grotesk',sans-serif", opacity: 0.6,
-              }}>
-                Connect (coming soon)
-              </button>
-            </div>
+          <div style={{ paddingTop: 16, fontSize: 12, color: p.textMuted,
+            fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
+            Zoom OAuth integration is coming soon. Once available, you&apos;ll be able to connect
+            your Zoom account to pull meeting schedules and cloud recording transcripts
+            directly into Workbench.
           </div>
         </div>
       )}
@@ -479,20 +541,10 @@ function ConnectorsSection({ userId }: { userId: string }) {
       </div>
 
       {/* Google Meet connector */}
-      <MeetingConnectorCard
-        name="Google Meet"
-        icon="🎙️"
-        description="Auto-fetch transcripts from Google Meet recordings to generate action items."
-        configKey="google-meet"
-      />
+      <GoogleMeetCard />
 
       {/* Zoom connector */}
-      <MeetingConnectorCard
-        name="Zoom"
-        icon="📹"
-        description="Connect Zoom to pull meeting transcripts and auto-populate Workbench."
-        configKey="zoom"
-      />
+      <ZoomCard />
 
       {/* Future connectors placeholder */}
       <div style={{

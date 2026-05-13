@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { signIn } from 'next-auth/react';
 import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import type { ActionItem, MOMUpload, MOMUploadVersion, AppState } from '@/lib/types';
@@ -622,18 +623,9 @@ function MeetingsPanel() {
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [events, setEvents] = useState<CalEvent[]>([]);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_token' | 'unconfigured'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_token'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // Check if any meeting connector is configured
-  const googleCfg = typeof window !== 'undefined'
-    ? (() => { try { return JSON.parse(localStorage.getItem('meeting-google-meet') ?? '{}'); } catch { return {}; } })()
-    : {};
-  const zoomCfg = typeof window !== 'undefined'
-    ? (() => { try { return JSON.parse(localStorage.getItem('meeting-zoom') ?? '{}'); } catch { return {}; } })()
-    : {};
-  const isConfigured = !!(googleCfg?.clientId || zoomCfg?.clientId);
 
   const fetchEvents = useCallback(async (date: string) => {
     setStatus('loading'); setEvents([]);
@@ -650,10 +642,9 @@ function MeetingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (isConfigured) fetchEvents(selectedDate);
-    else setStatus('unconfigured');
+    fetchEvents(selectedDate);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfigured]);
+  }, []);
 
   function handleDateChange(d: string) {
     setSelectedDate(d);
@@ -694,32 +685,23 @@ function MeetingsPanel() {
       </div>
 
       {/* States */}
-      {status === 'unconfigured' && (
-        <div style={{ padding: '20px 0', textAlign: 'center' }}>
-          <div style={{ fontSize: 22, marginBottom: 8 }}>📅</div>
-          <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}>
-            Configure Google Meet or Zoom in<br />
-            <a href="/settings" style={{ color: p.violet, textDecoration: 'none', fontWeight: 600 }}>
-              Settings → Connectors
-            </a>
-          </div>
-        </div>
-      )}
-
       {status === 'no_token' && (
         <div style={{ padding: '16px 0', textAlign: 'center' }}>
           <div style={{ fontSize: 20, marginBottom: 8 }}>🔐</div>
           <div style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif", lineHeight: 1.6, marginBottom: 10 }}>
-            Sign in again to grant calendar access
+            Grant calendar access to see your meetings
           </div>
-          <a href="/api/auth/signin" style={{
-            display: 'inline-block', padding: '7px 16px', borderRadius: 8,
-            background: 'linear-gradient(135deg,#534AB7,#7F77DD)', color: '#EEEDFE',
-            fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600,
-            textDecoration: 'none',
-          }}>
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/workbench' })}
+            style={{
+              padding: '7px 16px', borderRadius: 8,
+              background: 'linear-gradient(135deg,#534AB7,#7F77DD)', color: '#EEEDFE',
+              fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600,
+              border: 'none', cursor: 'pointer',
+            }}
+          >
             Authorize Calendar
-          </a>
+          </button>
         </div>
       )}
 
