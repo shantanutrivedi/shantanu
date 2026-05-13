@@ -949,14 +949,14 @@ export default function DashboardPage() {
 
         <ProjectHealthBanner project={activeProject} />
 
+        <GanttChart projects={state.projects} actions={projectActions} />
+
         <KPIGrid total={total} done={done} blocked={blocked} pct={pct} activityCount={projectActivities.length} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20, marginBottom: 28 }}>
           <ActionSummaryTable actions={projectActions} />
           <GoLiveCalendar projects={state.projects} />
         </div>
-
-        <GanttChart projects={state.projects} actions={projectActions} />
 
         <RecentActivityFeed activities={projectActivities} />
 
