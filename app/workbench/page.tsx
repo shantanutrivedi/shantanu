@@ -1007,6 +1007,9 @@ export default function WorkbenchPage() {
   const [showResolver, setShowResolver] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<DuplicatePair | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [inputMode, setInputMode] = useState<'file' | 'notes'>('file');
+  const [notesText, setNotesText] = useState('');
+  const [meetingTitle, setMeetingTitle] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1063,13 +1066,19 @@ export default function WorkbenchPage() {
     const file = e.target.files?.[0]; if (file) readFile(file);
   }, [readFile]);
 
-  const handleParseWithAI = useCallback(async () => {
-    if (!rawText.trim()) return;
+  const parseText = useCallback(async (text: string, fname: string) => {
+    if (!text.trim()) return;
+    setRawText(text);
+    setFilename(fname);
     setParsing(true); setParseError('');
+    setParsedItems([]);
+    setDuplicates([]);
+    setShowResolver(false);
+    setSaved(false);
     try {
       const res = await fetch('/api/parse-mom', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ text: rawText, filename, model: loadState().selectedModel }),
+        body: JSON.stringify({ text, filename: fname, model: loadState().selectedModel }),
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.items)) {
@@ -1087,7 +1096,6 @@ export default function WorkbenchPage() {
         setParsedItems(items);
         setSaved(false);
 
-        // Duplicate detection against existing action items
         const existing = loadState().actionItems;
         const found: DuplicatePair[] = [];
         for (const inc of items) {
@@ -1108,7 +1116,7 @@ export default function WorkbenchPage() {
     } finally {
       setParsing(false);
     }
-  }, [rawText, filename]);
+  }, []);
 
   const handleEditItem = useCallback((id: string, col: ColKey, value: string) => {
     setParsedItems(prev => {
@@ -1281,67 +1289,147 @@ export default function WorkbenchPage() {
       {/* Upload + Recent grid */}
       <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:20, alignItems:'start' }}>
 
-        {/* Drop Zone */}
+        {/* Drop Zone + Paste Notes — tabbed */}
         <div style={cardStyle}>
-          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, fontSize:15,
-            color: p.textPrimary, marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ width:6, height:6, borderRadius:3, background: p.violet,
-              boxShadow: p.glow ? p.glowStr(p.violet, 8) : 'none', display:'inline-block' }} />
-            Upload MOM File
+
+          {/* Tab bar */}
+          <div style={{ display:'flex', gap:4, marginBottom:20,
+            background: p.inputBg, borderRadius:10, padding:4 }}>
+            {(['file','notes'] as const).map(mode => (
+              <button key={mode} onClick={() => { setInputMode(mode); setParseError(''); }}
+                style={{
+                  flex:1, padding:'7px 0', borderRadius:7, fontSize:12, fontWeight:600,
+                  fontFamily:"'Space Grotesk',sans-serif", cursor:'pointer', border:'none',
+                  background: inputMode === mode
+                    ? (mode === 'notes' ? 'linear-gradient(135deg,#534AB7,#7F77DD)' : p.cardBg)
+                    : 'none',
+                  color: inputMode === mode
+                    ? (mode === 'notes' ? '#EEEDFE' : p.textPrimary)
+                    : p.textMuted,
+                  boxShadow: inputMode === mode && mode === 'file' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
+                  transition:'all 0.15s',
+                }}>
+                {mode === 'file' ? '📄  Upload File' : '✏️  Paste Notes'}
+              </button>
+            ))}
           </div>
 
-          <div style={dropzoneStyle} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
-            onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
-            <div style={{ fontSize:32, marginBottom:10 }}>📄</div>
-            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, fontSize:15,
-              color: dragging ? p.violet : p.textPrimary, marginBottom:6 }}>
-              {dragging ? 'Drop to upload' : 'Drag & drop your meeting file'}
+          {/* ── File upload mode ── */}
+          {inputMode === 'file' && (<>
+            <div style={dropzoneStyle} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+              onDrop={handleDrop} onClick={() => fileRef.current?.click()}>
+              <div style={{ fontSize:32, marginBottom:10 }}>📄</div>
+              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, fontSize:15,
+                color: dragging ? p.violet : p.textPrimary, marginBottom:6 }}>
+                {dragging ? 'Drop to upload' : 'Drag & drop your meeting file'}
+              </div>
+              <div style={{ fontFamily:"'Inter',sans-serif", fontSize:12, color: p.textMuted }}>
+                or click to browse — PDF, DOCX, XLSX, TXT, JSON and more
+              </div>
             </div>
-            <div style={{ fontFamily:"'Inter',sans-serif", fontSize:12, color: p.textMuted }}>
-              or click to browse — PDF, DOCX, XLSX, TXT, JSON and more
-            </div>
-          </div>
-          <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.doc,.docx,.xlsx,.xls,.csv,.json" style={{ display:'none' }} onChange={handleFileInput} />
+            <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.doc,.docx,.xlsx,.xls,.csv,.json"
+              style={{ display:'none' }} onChange={handleFileInput} />
 
-          {parseError && (
-            <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10,
-              background:'rgba(240,153,123,0.12)', border:'1px solid rgba(240,153,123,0.3)',
-              color: p.coral, fontFamily:"'JetBrains Mono',monospace", fontSize:12 }}>
-              {parseError}
-            </div>
-          )}
+            {parseError && (
+              <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10,
+                background:'rgba(240,153,123,0.12)', border:'1px solid rgba(240,153,123,0.3)',
+                color: p.coral, fontFamily:"'JetBrains Mono',monospace", fontSize:12 }}>
+                {parseError}
+              </div>
+            )}
 
-          {rawText && (
-            <div style={{ marginTop:20 }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color: p.coral }}>{filename}</span>
-                  <span style={{ fontSize:10, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>
-                    {rawText.length.toLocaleString()} chars
-                  </span>
+            {rawText && (
+              <div style={{ marginTop:20 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color: p.coral }}>{filename}</span>
+                    <span style={{ fontSize:10, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>
+                      {rawText.length.toLocaleString()} chars
+                    </span>
+                  </div>
+                  <button onClick={() => parseText(rawText, filename)} disabled={parsing}
+                    style={{ ...primaryBtnStyle, opacity: parsing ? 0.7 : 1, cursor: parsing ? 'not-allowed' : 'pointer' }}>
+                    {parsing
+                      ? <><span style={{ display:'inline-block', width:14, height:14, border:'2px solid rgba(255,255,255,0.3)',
+                            borderTopColor:'#EEEDFE', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />Parsing…</>
+                      : <>✦ Parse with AI</>}
+                  </button>
                 </div>
-                <button onClick={handleParseWithAI} disabled={parsing}
-                  style={{ ...primaryBtnStyle, opacity: parsing ? 0.7 : 1, cursor: parsing ? 'not-allowed' : 'pointer' }}>
-                  {parsing
-                    ? <><span style={{ display:'inline-block', width:14, height:14, border:'2px solid rgba(255,255,255,0.3)',
-                          borderTopColor:'#EEEDFE', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />Parsing…</>
-                    : <>✦ Parse with AI</>}
-                </button>
+                <div style={{ maxHeight:220, overflowY:'auto', padding:'14px 16px', borderRadius:10,
+                  background: p.cardBg, border:`1px solid ${p.borderTint}`,
+                  fontFamily:"'JetBrains Mono',monospace", fontSize:11, color: p.textBody,
+                  lineHeight:1.65, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                  {rawText}
+                </div>
               </div>
-              <div style={{ maxHeight:220, overflowY:'auto', padding:'14px 16px', borderRadius:10,
-                background: p.cardBg, border:`1px solid ${p.borderTint}`,
-                fontFamily:"'JetBrains Mono',monospace", fontSize:11, color: p.textBody,
-                lineHeight:1.65, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                {rawText}
-              </div>
-            </div>
-          )}
+            )}
 
-          {!rawText && (
-            <div style={{ marginTop:16, display:'flex', justifyContent:'center' }}>
-              <button disabled style={{ ...primaryBtnStyle, opacity:0.35, cursor:'not-allowed' }}>✦ Parse with AI</button>
+            {!rawText && (
+              <div style={{ marginTop:16, display:'flex', justifyContent:'center' }}>
+                <button disabled style={{ ...primaryBtnStyle, opacity:0.35, cursor:'not-allowed' }}>✦ Parse with AI</button>
+              </div>
+            )}
+          </>)}
+
+          {/* ── Paste Notes mode ── */}
+          {inputMode === 'notes' && (<>
+            <input
+              type="text"
+              value={meetingTitle}
+              onChange={e => setMeetingTitle(e.target.value)}
+              placeholder="Meeting title (optional) — e.g. Sprint Planning · May 2026"
+              style={{
+                width:'100%', background: p.inputBg, border:`1px solid ${p.border}`,
+                borderRadius:8, padding:'8px 12px', fontSize:13,
+                color: p.textPrimary, fontFamily:"'Inter',sans-serif",
+                outline:'none', boxSizing:'border-box', marginBottom:12,
+              }}
+            />
+            <textarea
+              value={notesText}
+              onChange={e => setNotesText(e.target.value)}
+              placeholder={`Paste or type your meeting notes here…\n\nExamples of what AI will extract:\n  • Action items with owner and deadline\n  • Decisions made\n  • Risks flagged\n  • Follow-ups needed`}
+              style={{
+                width:'100%', minHeight:240, background: p.inputBg,
+                border:`1px solid ${p.border}`, borderRadius:10,
+                padding:'14px 16px', fontSize:12,
+                color: p.textPrimary, fontFamily:"'JetBrains Mono',monospace",
+                lineHeight:1.7, resize:'vertical', outline:'none',
+                boxSizing:'border-box', transition:'border-color 0.15s',
+              }}
+              onFocus={e => (e.target.style.borderColor = p.violet)}
+              onBlur={e => (e.target.style.borderColor = p.border)}
+            />
+
+            {parseError && (
+              <div style={{ marginTop:10, padding:'10px 14px', borderRadius:10,
+                background:'rgba(240,153,123,0.12)', border:'1px solid rgba(240,153,123,0.3)',
+                color: p.coral, fontFamily:"'JetBrains Mono',monospace", fontSize:12 }}>
+                {parseError}
+              </div>
+            )}
+
+            <div style={{ marginTop:14, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontSize:11, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>
+                {notesText.length > 0 ? `${notesText.length.toLocaleString()} chars` : 'Type or paste above'}
+              </span>
+              <button
+                onClick={() => {
+                  const today = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+                  const title = meetingTitle.trim() || `Meeting Notes · ${today}`;
+                  parseText(notesText, title);
+                }}
+                disabled={!notesText.trim() || parsing}
+                style={{ ...primaryBtnStyle,
+                  opacity: !notesText.trim() || parsing ? 0.4 : 1,
+                  cursor: !notesText.trim() || parsing ? 'not-allowed' : 'pointer' }}>
+                {parsing
+                  ? <><span style={{ display:'inline-block', width:14, height:14, border:'2px solid rgba(255,255,255,0.3)',
+                        borderTopColor:'#EEEDFE', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />Parsing…</>
+                  : <>✦ Parse with AI</>}
+              </button>
             </div>
-          )}
+          </>)}
         </div>
 
         {/* Right column: Recent Uploads + Meetings stacked */}
