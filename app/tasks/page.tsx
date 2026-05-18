@@ -1,30 +1,32 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { loadState, saveState, onUserChange } from '@/lib/store';
 import { loadJiraConfig } from '@/lib/userConfig';
 import { usePalette } from '@/lib/palette';
 import type { Palette } from '@/lib/palette';
-import type { AppState, ActionItem, DailyActivity } from '@/lib/types';
+import type { AppState, ActionItem } from '@/lib/types';
 
-// ── Unified task ─────────────────────────────────────────────────────────────
+// ── Unified task ──────────────────────────────────────────────────────────────
 
 interface Task {
   id: string;
   source: 'MOM' | 'Activity';
   task: string;
   assignee: string;
+  startDate: string;
   eta: string;
   product: string;
   priority: string;
   type: string;
   status: string;
   comment: string;
+  jiraUrl: string;
   projectId: string;
 }
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function toISO(raw: string): string {
   if (!raw) return '';
@@ -35,7 +37,7 @@ export function toISO(raw: string): string {
 }
 
 export function fmtDate(raw: string): string {
-  if (!raw) return '—';
+  if (!raw || raw === 'TBD') return raw || '—';
   const iso = toISO(raw);
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
     const [y, m, d] = iso.split('-').map(Number);
@@ -45,190 +47,397 @@ export function fmtDate(raw: string): string {
   return raw;
 }
 
-// ── Calendar picker ───────────────────────────────────────────────────────────
+function getDisplayId(task: Task): string {
+  const raw = task.id.replace(/^(mom|act)-/, '');
+  return `SH-${raw.slice(-5).toUpperCase()}`;
+}
 
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_INITIALS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+type KanbanStatus = 'todo' | 'inprogress' | 'done' | 'blocked';
 
-function CalendarPicker({ value, onSelect, onClose, p, fixedPos }: {
-  value: string; onSelect: (d: string) => void; onClose: () => void; p: Palette;
-  fixedPos?: { top: number; left: number };
-}) {
-  const init = value ? new Date(value + 'T00:00:00') : new Date();
-  const [yr, setYr] = useState(init.getFullYear());
-  const [mo, setMo] = useState(init.getMonth());
-  const ref = useRef<HTMLDivElement>(null);
+function getKanbanStatus(task: Task): KanbanStatus {
+  if (task.source === 'Activity') {
+    const today = new Date().toISOString().split('T')[0];
+    return task.eta && task.eta < today ? 'done' : 'inprogress';
+  }
+  switch (task.status) {
+    case 'In Progress': return 'inprogress';
+    case 'Done':        return 'done';
+    case 'Blocked':     return 'blocked';
+    default:            return 'todo';
+  }
+}
+
+// ── Kanban column definitions ─────────────────────────────────────────────────
+
+const KANBAN_COLS: { id: KanbanStatus; label: string; colorKey: keyof Palette }[] = [
+  { id: 'todo',       label: 'To Do',       colorKey: 'violet' },
+  { id: 'inprogress', label: 'In Progress', colorKey: 'cyan'   },
+  { id: 'done',       label: 'Done',        colorKey: 'lime'   },
+  { id: 'blocked',    label: 'Blocked',     colorKey: 'coral'  },
+];
+
+const PRODUCTS = [
+  { value: 'AI for Work',    color: '#8B7CFF', lightColor: '#5548D9' },
+  { value: 'Search AI',      color: '#56E0FF', lightColor: '#007FAA' },
+  { value: 'Agent Platform', color: '#B6FF6E', lightColor: '#4A9200' },
+] as const;
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SourceBadge({ source, p }: { source: 'MOM' | 'Activity'; p: Palette }) {
+  const color = source === 'MOM' ? p.violet : p.amber;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 7px',
+      borderRadius: 100, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+      fontFamily: "'JetBrains Mono',monospace",
+      background: `${color}18`, color, border: `1px solid ${color}30`,
+    }}>
+      {source === 'MOM' ? 'MOM' : 'ACT'}
+    </span>
+  );
+}
+
+function TypeBadge({ type, p }: { type: string; p: Palette }) {
+  const MAP: Record<string, string> = {
+    Feature: p.cyan, Bug: p.coral, Config: p.amber,
+    Risk: p.pink, Decision: p.violet, Meeting: p.violet, Other: p.textMuted,
+  };
+  const color = MAP[type] || p.textMuted;
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 7px', borderRadius: 6,
+      fontSize: 9, fontFamily: "'JetBrains Mono',monospace",
+      background: `${color}18`, color, border: `1px solid ${color}30`,
+    }}>
+      {type}
+    </span>
+  );
+}
+
+function PriorityDot({ priority, p }: { priority: string; p: Palette }) {
+  const color = priority === 'High' ? p.coral : priority === 'Medium' ? p.amber : p.textMuted;
+  if (!priority) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10,
+      fontFamily: "'JetBrains Mono',monospace", color }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color,
+        boxShadow: p.glow ? `0 0 6px ${color}` : 'none', display: 'inline-block', flexShrink: 0 }} />
+      {priority}
+    </span>
+  );
+}
+
+function AssigneeInitials({ name, p }: { name: string; p: Palette }) {
+  if (!name) return <span style={{ color: p.textMuted, fontSize: 10 }}>—</span>;
+  const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 22, height: 22, borderRadius: '50%', fontSize: 9, fontWeight: 700,
+      fontFamily: "'Space Grotesk',sans-serif",
+      background: `${p.violet}22`, color: p.violet, border: `1px solid ${p.violet}40`,
+      flexShrink: 0,
+    }}>
+      {initials}
+    </span>
+  );
+}
+
+// ── Task detail modal ─────────────────────────────────────────────────────────
+
+function TaskDetailModal({ task, onClose, p }: { task: Task; onClose: () => void; p: Palette }) {
+  const displayId = getDisplayId(task);
+  const colInfo = KANBAN_COLS.find(c => c.id === getKanbanStatus(task));
+  const statusColor = colInfo ? (p[colInfo.colorKey] as string) : p.textMuted;
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  function prev() { if (mo === 0) { setYr(y => y-1); setMo(11); } else setMo(m => m-1); }
-  function next() { if (mo === 11) { setYr(y => y+1); setMo(0); } else setMo(m => m+1); }
-
-  function pick(day: number) {
-    onSelect(`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
-    onClose();
-  }
-
-  const first = new Date(yr, mo, 1).getDay();
-  const days  = new Date(yr, mo+1, 0).getDate();
-  const today = new Date();
-  const todayMark = today.getFullYear()===yr && today.getMonth()===mo ? today.getDate() : null;
-  const selDay = value?.startsWith(`${yr}-${String(mo+1).padStart(2,'0')}`) ? +value.split('-')[2] : null;
-
-  const cells: (number|null)[] = [];
-  for (let i=0; i<first; i++) cells.push(null);
-  for (let d=1; d<=days; d++) cells.push(d);
-  while (cells.length%7) cells.push(null);
-
-  const posStyle = fixedPos
-    ? { position: 'fixed' as const, top: fixedPos.top, left: fixedPos.left }
-    : { position: 'absolute' as const, top: '100%', left: 0 };
+  const fieldStyle: React.CSSProperties = {
+    background: p.inputBg, borderRadius: 10, padding: '10px 14px',
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+    color: p.textMuted, fontFamily: "'JetBrains Mono',monospace", marginBottom: 4,
+  };
+  const valueStyle: React.CSSProperties = {
+    fontSize: 12, color: p.textBody, fontFamily: "'JetBrains Mono',monospace",
+  };
 
   return (
-    <div ref={ref} style={{
-      ...posStyle, zIndex: 9999, marginTop: fixedPos ? 0 : 6,
-      background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 14,
-      padding: 16, width: 268,
-      boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
-    }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 12 }}>
-        <button onClick={prev} style={{ background:'none', border:'none', cursor:'pointer', color: p.violet, fontSize: 20, lineHeight:1, padding:'0 6px' }}>‹</button>
-        <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize: 13, color: p.textPrimary }}>
-          {MONTH_NAMES[mo]} {yr}
-        </span>
-        <button onClick={next} style={{ background:'none', border:'none', cursor:'pointer', color: p.violet, fontSize: 20, lineHeight:1, padding:'0 6px' }}>›</button>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: p.cardBg, border: `1px solid ${p.border}`, borderRadius: 20,
+          padding: '28px 32px', width: '100%', maxWidth: 580, maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: p.glow ? `0 0 60px rgba(139,124,255,0.2), 0 24px 64px rgba(0,0,0,0.5)` : '0 24px 64px rgba(0,0,0,0.25)',
+        }}
+      >
+        {/* Modal header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace",
+                color: p.violet, background: `${p.violet}14`, border: `1px solid ${p.violet}30`,
+                padding: '3px 10px', borderRadius: 6,
+              }}>
+                {displayId}
+              </span>
+              <SourceBadge source={task.source} p={p} />
+              <span style={{
+                fontSize: 10, fontFamily: "'JetBrains Mono',monospace",
+                background: `${statusColor}14`, color: statusColor, border: `1px solid ${statusColor}30`,
+                padding: '2px 9px', borderRadius: 100,
+              }}>
+                {colInfo?.label ?? task.status}
+              </span>
+            </div>
+            <h2 style={{
+              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18,
+              color: p.textPrimary, margin: 0, lineHeight: 1.35,
+            }}>
+              {task.task || '—'}
+            </h2>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: p.textMuted,
+            fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 6, flexShrink: 0,
+          }}>×</button>
+        </div>
+
+        {/* Fields grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>Assignee</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AssigneeInitials name={task.assignee} p={p} />
+              <span style={valueStyle}>{task.assignee || '—'}</span>
+            </div>
+          </div>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>Product</div>
+            <div style={{
+              ...valueStyle,
+              color: task.product === 'AI for Work' ? p.violet
+                : task.product === 'Search AI' ? p.cyan
+                : task.product === 'Agent Platform' ? p.lime
+                : p.textMuted,
+              fontWeight: task.product ? 600 : 400,
+            }}>
+              {task.product || '—'}
+            </div>
+          </div>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>Start Date</div>
+            <div style={{ ...valueStyle, color: task.startDate ? p.violet : p.textMuted }}>
+              {fmtDate(task.startDate) || '—'}
+            </div>
+          </div>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>ETA</div>
+            <div style={{ ...valueStyle, color: task.eta ? p.cyan : p.textMuted }}>
+              {fmtDate(task.eta) || '—'}
+            </div>
+          </div>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>Priority</div>
+            <PriorityDot priority={task.priority} p={p} />
+            {!task.priority && <span style={{ ...valueStyle, color: p.textMuted }}>—</span>}
+          </div>
+
+          <div style={fieldStyle}>
+            <div style={labelStyle}>Type</div>
+            {task.type ? <TypeBadge type={task.type} p={p} /> : <span style={{ ...valueStyle, color: p.textMuted }}>—</span>}
+          </div>
+
+          {task.projectId && (
+            <div style={fieldStyle}>
+              <div style={labelStyle}>Project</div>
+              <div style={{ ...valueStyle, color: p.textBody }}>{task.projectId}</div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Comment */}
+        {task.comment && (
+          <div style={{ ...fieldStyle, marginTop: 10 }}>
+            <div style={labelStyle}>Comment</div>
+            <div style={{ ...valueStyle, color: p.textBody, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {task.comment}
+            </div>
+          </div>
+        )}
+
+        {/* Jira URL */}
+        {task.jiraUrl && (
+          <div style={{ ...fieldStyle, marginTop: 10 }}>
+            <div style={labelStyle}>Jira</div>
+            <a href={task.jiraUrl} target="_blank" rel="noreferrer" style={{
+              ...valueStyle, color: '#2684FF', textDecoration: 'underline',
+              display: 'block', wordBreak: 'break-all',
+            }}>
+              {task.jiraUrl}
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Kanban card ───────────────────────────────────────────────────────────────
+
+function KanbanCard({ task, onClick, p }: { task: Task; onClick: () => void; p: Palette }) {
+  const [hovered, setHovered] = useState(false);
+  const displayId = getDisplayId(task);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? p.inputBg : p.cardBg,
+        border: `1px solid ${hovered ? p.border : p.borderTint}`,
+        borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+        transition: 'all 0.15s',
+        boxShadow: hovered && p.glow ? `0 4px 20px rgba(139,124,255,0.15)` : hovered ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
+      }}
+    >
+      {/* Top row: ID + type + source */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: p.violet,
+            fontFamily: "'JetBrains Mono',monospace", flexShrink: 0,
+          }}>
+            {displayId}
+          </span>
+          {task.type && <TypeBadge type={task.type} p={p} />}
+        </div>
+        <SourceBadge source={task.source} p={p} />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
-        {DAY_INITIALS.map(d => (
-          <div key={d} style={{ textAlign:'center', fontSize: 9, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace", fontWeight: 600, padding:'2px 0' }}>{d}</div>
-        ))}
+      {/* Task title */}
+      <div style={{
+        fontSize: 12, fontFamily: "'Inter',sans-serif", color: p.textPrimary,
+        lineHeight: 1.45, marginBottom: 10,
+        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      }}>
+        {task.task || <span style={{ color: p.textMuted }}>Untitled task</span>}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap: 2 }}>
-        {cells.map((day, i) => (
-          <button key={i} onClick={() => day && pick(day)} style={{
-            padding:'6px 0', borderRadius: 7, border:'none',
-            cursor: day ? 'pointer' : 'default',
-            fontSize: 12, fontFamily:"'JetBrains Mono',monospace",
-            background: day===selDay ? p.violet : day===todayMark ? `${p.violet}20` : 'none',
-            color: day===selDay ? '#fff' : day===todayMark ? p.violet : day ? p.textPrimary : 'transparent',
-            fontWeight: (day===selDay || day===todayMark) ? 700 : 400,
-            transition: 'background 0.1s',
-          }}>{day ?? ''}</button>
-        ))}
+      {/* Bottom row: priority + assignee + eta */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {task.priority && <PriorityDot priority={task.priority} p={p} />}
+          <AssigneeInitials name={task.assignee} p={p} />
+        </div>
+        {task.eta && (
+          <span style={{
+            fontSize: 9, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace",
+            flexShrink: 0,
+          }}>
+            {fmtDate(task.eta)}
+          </span>
+        )}
       </div>
 
-      {value && (
-        <button onClick={() => { onSelect(''); onClose(); }} style={{
-          width:'100%', marginTop: 10, padding:'6px 0', borderRadius: 8,
-          border: `1px solid ${p.border}`, background:'none', cursor:'pointer',
-          color: p.textMuted, fontSize: 11, fontFamily:"'JetBrains Mono',monospace",
-        }}>
-          Clear date
-        </button>
+      {/* Product tag if present */}
+      {task.product && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${p.borderTint}` }}>
+          <span style={{
+            fontSize: 9, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600,
+            color: task.product === 'AI for Work' ? p.violet
+              : task.product === 'Search AI' ? p.cyan
+              : p.lime,
+          }}>
+            {task.product}
+          </span>
+        </div>
       )}
     </div>
   );
 }
 
-// ── Column filter dropdown ────────────────────────────────────────────────────
+// ── Kanban column ─────────────────────────────────────────────────────────────
 
-function FilterDropdown({ options, value, onSelect, onClose, p }: {
-  options: string[]; value: string;
-  onSelect: (v: string) => void; onClose: () => void; p: Palette;
+function KanbanColumn({ colId, label, colorKey, tasks, onCardClick, p }: {
+  colId: KanbanStatus; label: string; colorKey: keyof Palette;
+  tasks: Task[]; onCardClick: (t: Task) => void; p: Palette;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
+  const color = p[colorKey] as string;
 
   return (
-    <div ref={ref} style={{
-      position:'absolute', top:'100%', left: 0, zIndex: 300, minWidth: 150,
-      background: p.cardBg, border:`1px solid ${p.border}`, borderRadius: 12,
-      padding:'4px 0', boxShadow:'0 12px 36px rgba(0,0,0,0.28)', marginTop: 4,
+    <div style={{
+      display: 'flex', flexDirection: 'column', minWidth: 0,
     }}>
-      {['All', ...options].map(opt => {
-        const active = opt === 'All' ? !value : value === opt;
-        return (
-          <button key={opt} onClick={() => { onSelect(opt === 'All' ? '' : opt); onClose(); }} style={{
-            width:'100%', textAlign:'left', padding:'8px 14px',
-            background: active ? p.rowBg : 'none', border:'none', cursor:'pointer',
-            fontSize: 12, color: active ? p.violet : p.textBody,
-            fontFamily:"'Inter',sans-serif", fontWeight: active ? 600 : 400,
+      {/* Column header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+        padding: '8px 12px', borderRadius: 10,
+        background: `${color}10`, border: `1px solid ${color}25`,
+      }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0,
+          boxShadow: p.glow ? `0 0 8px ${color}` : 'none',
+        }} />
+        <span style={{
+          fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 13,
+          color: p.textPrimary, flex: 1,
+        }}>
+          {label}
+        </span>
+        <span style={{
+          fontSize: 10, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace",
+          color, background: `${color}18`, border: `1px solid ${color}30`,
+          padding: '2px 8px', borderRadius: 100,
+        }}>
+          {tasks.length}
+        </span>
+      </div>
+
+      {/* Cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        {tasks.length === 0 ? (
+          <div style={{
+            border: `1px dashed ${p.borderTint}`, borderRadius: 12,
+            padding: '24px 16px', textAlign: 'center',
+            color: p.textMuted, fontSize: 11, fontFamily: "'Inter',sans-serif",
           }}>
-            {opt}
-          </button>
-        );
-      })}
+            No tasks
+          </div>
+        ) : (
+          tasks.map(task => (
+            <KanbanCard key={task.id} task={task} onClick={() => onCardClick(task)} p={p} />
+          ))
+        )}
+      </div>
     </div>
   );
 }
-
-// ── Product pill ──────────────────────────────────────────────────────────────
-
-const PRODUCTS = [
-  { value: 'AI for Work',     color: '#8B7CFF', lightColor: '#5548D9' },
-  { value: 'Search AI',       color: '#56E0FF', lightColor: '#007FAA' },
-  { value: 'Agent Platform',  color: '#B6FF6E', lightColor: '#4A9200' },
-] as const;
-
-function SourceBadge({ source, p }: { source: 'MOM' | 'Activity'; p: Palette }) {
-  const isMOM = source === 'MOM';
-  const color = isMOM ? p.violet : p.amber;
-  return (
-    <span style={{
-      display:'inline-flex', alignItems:'center', gap: 4, padding:'2px 8px',
-      borderRadius: 100, fontSize: 9, fontWeight: 700, letterSpacing:'0.05em',
-      fontFamily:"'JetBrains Mono',monospace",
-      background:`${color}18`, color, border:`1px solid ${color}30`,
-    }}>
-      {isMOM ? 'MOM' : 'ACT'}
-    </span>
-  );
-}
-
-function StatusChip({ status, p }: { status: string; p: Palette }) {
-  const MAP: Record<string, string> = {
-    'Done': p.lime, 'In Progress': p.cyan, 'Blocked': p.coral,
-    'Pending': p.violet, 'Feature': p.cyan, 'Bug': p.coral,
-    'Config': p.amber, 'Meeting': p.violet, 'Other': p.textMuted,
-  };
-  const color = MAP[status] || p.textMuted;
-  return (
-    <span style={{
-      display:'inline-flex', alignItems:'center', gap: 4, padding:'2px 8px',
-      borderRadius: 100, fontSize: 10, fontFamily:"'JetBrains Mono',monospace",
-      background:`${color}18`, color, border:`1px solid ${color}30`,
-    }}>
-      <span style={{ width:5, height:5, borderRadius:'50%', background:color, display:'inline-block' }}/>
-      {status}
-    </span>
-  );
-}
-
-// ── Column header with filter ─────────────────────────────────────────────────
-
-const COLS = [
-  { key:'source',   label:'Source',   filterable:true,  width:'6%'  },
-  { key:'task',     label:'Task',     filterable:false, width:'24%' },
-  { key:'assignee', label:'Assignee', filterable:true,  width:'9%'  },
-  { key:'eta',      label:'ETA',      filterable:'date' as const, width:'9%'  },
-  { key:'product',  label:'Product',  filterable:true,  width:'10%' },
-  { key:'priority', label:'Priority', filterable:true,  width:'8%'  },
-  { key:'type',     label:'Type',     filterable:true,  width:'8%'  },
-  { key:'status',   label:'Status',   filterable:true,  width:'11%' },
-  { key:'comment',  label:'Comment',  filterable:false, width:'15%' },
-] as const;
-
-type ColKey = (typeof COLS)[number]['key'];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -237,10 +446,7 @@ export default function TasksPage() {
   const { data: session } = useSession();
   const [state, setState] = useState<AppState | null>(null);
   const [productFilter, setProductFilter] = useState('');
-  const [colFilters, setColFilters] = useState<Partial<Record<ColKey, string>>>({});
-  const [openFilter, setOpenFilter] = useState<ColKey | null>(null);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarRect, setCalendarRect] = useState<{ top: number; left: number } | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ updated: number; error?: string } | null>(null);
 
@@ -254,7 +460,6 @@ export default function TasksPage() {
 
   const userId = session?.user?.id || 'guest';
 
-  // Items in the current filtered view that have a Jira URL
   const jiraItems = useMemo(() => {
     if (!state) return [];
     return state.actionItems.filter(a => a.jiraUrl?.trim());
@@ -262,31 +467,19 @@ export default function TasksPage() {
 
   async function handleJiraSync() {
     if (!state || jiraItems.length === 0) return;
-    setSyncing(true);
-    setSyncResult(null);
-
+    setSyncing(true); setSyncResult(null);
     const jiraConfig = loadJiraConfig(userId);
     if (!jiraConfig.baseUrl || !jiraConfig.email || !jiraConfig.apiToken) {
       setSyncResult({ updated: 0, error: 'Jira not configured. Go to Settings → Connectors.' });
-      setSyncing(false);
-      return;
+      setSyncing(false); return;
     }
-
     try {
       const res = await fetch('/api/jira-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: jiraItems.map(a => ({ id: a.id, jiraUrl: a.jiraUrl })),
-          jiraConfig,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: jiraItems.map(a => ({ id: a.id, jiraUrl: a.jiraUrl })), jiraConfig }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setSyncResult({ updated: 0, error: data.error || 'Sync failed' });
-        return;
-      }
-
+      if (!res.ok) { setSyncResult({ updated: 0, error: data.error || 'Sync failed' }); return; }
       const updatedState = loadState();
       let updated = 0;
       for (const r of data.results) {
@@ -298,9 +491,7 @@ export default function TasksPage() {
           }
         }
       }
-      saveState(updatedState);
-      setState(updatedState);
-      setSyncResult({ updated });
+      saveState(updatedState); setState(updatedState); setSyncResult({ updated });
     } catch {
       setSyncResult({ updated: 0, error: 'Network error' });
     } finally {
@@ -312,124 +503,109 @@ export default function TasksPage() {
   // Build unified task list
   const allTasks = useMemo<Task[]>(() => {
     if (!state) return [];
-    const projectMap: Record<string, string> = {};
-    state.projects.forEach(pr => { projectMap[pr.id] = pr.name; });
-
     const momTasks: Task[] = (state.actionItems ?? []).map(a => ({
-      id: `mom-${a.id}`,
-      source: 'MOM' as const,
-      task: a.action,
-      assignee: a.assignee,
-      eta: toISO(a.eta),
-      product: a.product,
-      priority: a.priority,
-      type: a.type,
-      status: a.status,
-      comment: a.comment,
+      id:        `mom-${a.id}`,
+      source:    'MOM' as const,
+      task:      a.action,
+      assignee:  a.assignee,
+      startDate: a.startDate ?? '',
+      eta:       toISO(a.eta),
+      product:   a.product,
+      priority:  a.priority,
+      type:      a.type,
+      status:    a.status,
+      comment:   a.comment,
+      jiraUrl:   a.jiraUrl,
       projectId: a.projectId ?? '',
     }));
 
     const actTasks: Task[] = (state.activities ?? []).map(a => ({
-      id: `act-${a.id}`,
-      source: 'Activity' as const,
-      task: a.activity,
-      assignee: a.team,
-      eta: a.date,
-      product: '',
-      priority: '',
-      type: a.type,
-      status: a.type,
-      comment: '',
+      id:        `act-${a.id}`,
+      source:    'Activity' as const,
+      task:      a.activity,
+      assignee:  a.team,
+      startDate: '',
+      eta:       a.date,
+      product:   '',
+      priority:  '',
+      type:      a.type,
+      status:    a.type,
+      comment:   '',
+      jiraUrl:   '',
       projectId: a.projectId,
     }));
 
-    return [...momTasks, ...actTasks].sort((a, b) => b.eta.localeCompare(a.eta));
+    return [...momTasks, ...actTasks];
   }, [state]);
 
-  // Derive unique values per column (for filter dropdowns)
-  const uniqueValues = useMemo(() => {
-    const map: Partial<Record<ColKey, string[]>> = {};
-    COLS.filter(c => c.filterable && c.filterable !== 'date').forEach(col => {
-      const vals = [...new Set(allTasks.map(t => t[col.key as keyof Task] as string).filter(Boolean))].sort();
-      map[col.key] = vals;
-    });
-    return map;
-  }, [allTasks]);
-
-  // Apply filters
+  // Apply product filter
   const filtered = useMemo(() => {
+    if (!productFilter) return allTasks;
     return allTasks.filter(t => {
-      if (productFilter && t.source === 'MOM' && t.product !== productFilter) return false;
-      if (productFilter && t.source === 'Activity') return false;
-      for (const [col, val] of Object.entries(colFilters)) {
-        if (!val) continue;
-        const key = col as ColKey;
-        if (key === 'eta') {
-          if (t.eta !== val) return false;
-        } else {
-          if ((t[key as keyof Task] as string) !== val) return false;
-        }
-      }
-      return true;
+      if (t.source === 'Activity') return false;
+      return t.product === productFilter;
     });
-  }, [allTasks, productFilter, colFilters]);
+  }, [allTasks, productFilter]);
 
-  function setColFilter(col: ColKey, val: string) {
-    setColFilters(prev => ({ ...prev, [col]: val }));
-  }
-
-  const hasAnyFilter = productFilter || Object.values(colFilters).some(Boolean);
+  // Group by kanban status
+  const kanbanGroups = useMemo(() => {
+    const groups: Record<KanbanStatus, Task[]> = { todo: [], inprogress: [], done: [], blocked: [] };
+    for (const task of filtered) {
+      groups[getKanbanStatus(task)].push(task);
+    }
+    return groups;
+  }, [filtered]);
 
   if (!state) return (
-    <div style={{ padding:'40px', color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>Loading…</div>
+    <div style={{ padding: '40px', color: p.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>Loading…</div>
   );
 
   return (
-    <div style={{ background: p.pageBg, minHeight:'100vh', position:'relative', color: p.textPrimary }}>
+    <div style={{ background: p.pageBg, minHeight: '100vh', position: 'relative', color: p.textPrimary }}>
       {p.glow && (
         <div style={{
-          position:'fixed', inset:0, pointerEvents:'none', zIndex:0,
-          background:'radial-gradient(ellipse at 30% 0%, rgba(139,124,255,0.12), transparent 55%), radial-gradient(ellipse at 80% 10%, rgba(86,224,255,0.07), transparent 45%)',
-        }}/>
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+          background: 'radial-gradient(ellipse at 30% 0%, rgba(139,124,255,0.12), transparent 55%), radial-gradient(ellipse at 80% 10%, rgba(86,224,255,0.07), transparent 45%)',
+        }} />
       )}
 
-      <div style={{ position:'relative', zIndex:1, maxWidth:1400, margin:'0 auto', padding:'36px 32px 80px' }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 1400, margin: '0 auto', padding: '36px 32px 80px' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 28, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16 }}>
+        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
-            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase', color: p.violet, fontFamily:"'JetBrains Mono',monospace", marginBottom: 8 }}>
-              Unified View
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: p.violet, fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>
+              Kanban Board
             </div>
-            <h1 style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:34, letterSpacing:'-1px', color: p.textPrimary, margin:'0 0 6px' }}>
+            <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 34, letterSpacing: '-1px', color: p.textPrimary, margin: '0 0 6px' }}>
               Tasks
             </h1>
-            <p style={{ color: p.textMuted, fontSize:13, fontFamily:"'Inter',sans-serif", margin:0 }}>
-              All action items and activity logs — {filtered.length} of {allTasks.length} tasks
+            <p style={{ color: p.textMuted, fontSize: 13, fontFamily: "'Inter',sans-serif", margin: 0 }}>
+              {filtered.length} of {allTasks.length} tasks
+              {productFilter && ` · filtered by ${productFilter}`}
             </p>
           </div>
 
-          {/* Jira Sync button */}
+          {/* Jira Sync */}
           {jiraItems.length > 0 && (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6, flexShrink:0 }}>
-              <button onClick={handleJiraSync} disabled={syncing}
-                style={{
-                  display:'flex', alignItems:'center', gap:8,
-                  padding:'10px 20px', borderRadius:10, cursor: syncing ? 'not-allowed' : 'pointer',
-                  background:'linear-gradient(135deg,#0052CC,#2684FF)',
-                  border:'none', color:'#fff', fontFamily:"'Space Grotesk',sans-serif",
-                  fontWeight:600, fontSize:13, opacity: syncing ? 0.7 : 1,
-                  boxShadow: p.glow ? '0 0 18px rgba(0,82,204,0.4)' : '0 2px 8px rgba(0,82,204,0.3)',
-                  transition:'all 0.15s',
-                }}>
-                <span style={{ fontSize:14 }}>⟳</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+              <button onClick={handleJiraSync} disabled={syncing} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 20px', borderRadius: 10, cursor: syncing ? 'not-allowed' : 'pointer',
+                background: 'linear-gradient(135deg,#0052CC,#2684FF)',
+                border: 'none', color: '#fff', fontFamily: "'Space Grotesk',sans-serif",
+                fontWeight: 600, fontSize: 13, opacity: syncing ? 0.7 : 1,
+                boxShadow: p.glow ? '0 0 18px rgba(0,82,204,0.4)' : '0 2px 8px rgba(0,82,204,0.3)',
+                transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 14 }}>⟳</span>
                 {syncing ? 'Syncing…' : `Sync Jira (${jiraItems.length})`}
               </button>
               {syncResult && (
                 <div style={{
-                  fontSize:11, fontFamily:"'JetBrains Mono',monospace",
+                  fontSize: 11, fontFamily: "'JetBrains Mono',monospace",
                   color: syncResult.error ? p.coral : p.lime,
-                  padding:'4px 10px', borderRadius:6,
+                  padding: '4px 10px', borderRadius: 6,
                   background: syncResult.error ? `${p.coral}14` : `${p.lime}14`,
                 }}>
                   {syncResult.error || `✓ ${syncResult.updated} item${syncResult.updated !== 1 ? 's' : ''} updated`}
@@ -440,7 +616,7 @@ export default function TasksPage() {
         </div>
 
         {/* Product filter buttons */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 28 }}>
           {PRODUCTS.map(prod => {
             const active = productFilter === prod.value;
             const color = p.glow ? prod.color : prod.lightColor;
@@ -448,26 +624,26 @@ export default function TasksPage() {
               <button key={prod.value}
                 onClick={() => setProductFilter(active ? '' : prod.value)}
                 style={{
-                  padding:'18px 16px', borderRadius:16, cursor:'pointer',
+                  padding: '18px 16px', borderRadius: 16, cursor: 'pointer',
                   border: `2px solid ${color}`,
                   background: active ? color : `${color}10`,
                   color: active ? (p.glow ? '#1C1C24' : '#fff') : color,
-                  fontFamily:"'Space Grotesk',sans-serif", fontWeight:800, fontSize:15,
-                  letterSpacing:'-0.3px',
+                  fontFamily: "'Space Grotesk',sans-serif", fontWeight: 800, fontSize: 15,
+                  letterSpacing: '-0.3px',
                   boxShadow: active && p.glow ? `0 0 32px ${color}60, 0 0 8px ${color}40` : active ? `0 4px 16px ${color}40` : 'none',
-                  transition:'all 0.18s',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+                  transition: 'all 0.18s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 }}
               >
                 <span style={{
-                  width:8, height:8, borderRadius:'50%',
+                  width: 8, height: 8, borderRadius: '50%',
                   background: active ? (p.glow ? '#1C1C24' : '#fff') : color,
                   boxShadow: active && p.glow ? 'none' : p.glow ? `0 0 8px ${color}` : 'none',
-                  display:'inline-block', flexShrink:0,
-                }}/>
+                  display: 'inline-block', flexShrink: 0,
+                }} />
                 {prod.value}
                 {active && (
-                  <span style={{ fontSize:11, opacity:0.8, fontWeight:600 }}>
+                  <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 600 }}>
                     ({allTasks.filter(t => t.product === prod.value).length})
                   </span>
                 )}
@@ -476,195 +652,48 @@ export default function TasksPage() {
           })}
         </div>
 
-        {/* Active filters bar */}
-        {hasAnyFilter && (
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, flexWrap:'wrap' }}>
-            <span style={{ fontSize:11, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>Filters:</span>
-            {Object.entries(colFilters).filter(([,v]) => v).map(([col, val]) => (
-              <span key={col} style={{
-                display:'inline-flex', alignItems:'center', gap:6,
-                padding:'3px 10px', borderRadius:100, fontSize:11,
-                background: `${p.violet}18`, color: p.violet, border:`1px solid ${p.violet}30`,
-                fontFamily:"'JetBrains Mono',monospace",
-              }}>
-                {col}: {col === 'eta' ? fmtDate(val) : val}
-                <button onClick={() => setColFilter(col as ColKey, '')} style={{ background:'none', border:'none', cursor:'pointer', color: p.violet, fontSize:14, lineHeight:1, padding:0 }}>×</button>
-              </span>
-            ))}
-            <button onClick={() => { setColFilters({}); setProductFilter(''); }} style={{
-              padding:'3px 12px', borderRadius:100, fontSize:11, border:`1px solid ${p.border}`,
-              background:'none', cursor:'pointer', color: p.textMuted, fontFamily:"'JetBrains Mono',monospace",
-            }}>
-              Clear all
-            </button>
-          </div>
-        )}
-
-        {/* Table */}
-        <div style={{ borderRadius:16, border:`1px solid ${p.border}`, overflow:'hidden' }}>
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
-              <colgroup>
-                {COLS.map(c => <col key={c.key} style={{ width: c.width }}/>)}
-              </colgroup>
-
-              {/* Header */}
-              <thead>
-                <tr style={{ background: p.inputBg, borderBottom:`1px solid ${p.borderTint}` }}>
-                  {COLS.map(col => {
-                    const filterVal = colFilters[col.key] ?? '';
-                    const isFiltered = !!filterVal;
-                    return (
-                      <th key={col.key} style={{
-                        padding:'11px 10px', textAlign:'left', fontSize:10, fontWeight:600,
-                        letterSpacing:'0.07em', textTransform:'uppercase', color: isFiltered ? p.violet : p.textMuted,
-                        fontFamily:"'JetBrains Mono',monospace", position:'relative',
-                      }}>
-                        {col.filterable ? (
-                          <button
-                            onClick={(e) => {
-                              if (col.filterable === 'date') {
-                                const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                                const isOpen = openFilter === col.key;
-                                setCalendarOpen(!isOpen);
-                                setOpenFilter(isOpen ? null : col.key);
-                                setCalendarRect(isOpen ? null : { top: rect.bottom + 6, left: rect.left });
-                              } else {
-                                setOpenFilter(openFilter === col.key ? null : col.key);
-                                setCalendarOpen(false);
-                                setCalendarRect(null);
-                              }
-                            }}
-                            style={{
-                              background:'none', border:'none', cursor:'pointer',
-                              display:'flex', alignItems:'center', gap:5,
-                              color: isFiltered ? p.violet : p.textMuted,
-                              fontFamily:"'JetBrains Mono',monospace", fontSize:10,
-                              fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase',
-                              padding:0,
-                            }}
-                          >
-                            {col.label}
-                            <span style={{ fontSize:9, opacity:0.7 }}>{isFiltered ? '●' : '▾'}</span>
-                          </button>
-                        ) : (
-                          col.label
-                        )}
-
-                        {/* Text/select dropdown */}
-                        {col.filterable === true && openFilter === col.key && (
-                          <FilterDropdown
-                            options={uniqueValues[col.key] ?? []}
-                            value={filterVal}
-                            onSelect={v => setColFilter(col.key, v)}
-                            onClose={() => setOpenFilter(null)}
-                            p={p}
-                          />
-                        )}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-
-              {/* Body */}
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={COLS.length} style={{ textAlign:'center', padding:'48px 24px', color: p.textMuted, fontFamily:"'Inter',sans-serif", fontSize:14 }}>
-                      No tasks match the current filters.
-                    </td>
-                  </tr>
-                ) : filtered.map((task, i) => (
-                  <tr key={task.id} style={{
-                    borderBottom:`1px solid ${p.borderTint}`,
-                    background: i%2===0 ? 'transparent' : p.rowBg,
-                    transition:'background 0.12s',
-                  }}
-                    onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = p.inputBg}
-                    onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = i%2===0 ? 'transparent' : p.rowBg}
-                  >
-                    {/* Source */}
-                    <td style={{ padding:'9px 10px', verticalAlign:'middle' }}>
-                      <SourceBadge source={task.source} p={p}/>
-                    </td>
-                    {/* Task */}
-                    <td style={{ padding:'9px 10px', fontSize:12, color: p.textPrimary, fontFamily:"'Inter',sans-serif", lineHeight:1.5, wordBreak:'break-word', verticalAlign:'top' }}>
-                      {task.task || <span style={{ color: p.textMuted }}>—</span>}
-                    </td>
-                    {/* Assignee */}
-                    <td style={{ padding:'9px 10px', fontSize:11, color: p.textBody, fontFamily:"'JetBrains Mono',monospace", verticalAlign:'middle', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                      {task.assignee || '—'}
-                    </td>
-                    {/* ETA */}
-                    <td style={{ padding:'9px 10px', fontSize:11, color: task.eta ? p.cyan : p.textMuted, fontFamily:"'JetBrains Mono',monospace", verticalAlign:'middle', whiteSpace:'nowrap' }}>
-                      {fmtDate(task.eta)}
-                    </td>
-                    {/* Product */}
-                    <td style={{ padding:'9px 10px', verticalAlign:'middle' }}>
-                      {task.product ? (
-                        <span style={{
-                          fontSize:10, fontFamily:"'JetBrains Mono',monospace", fontWeight:600,
-                          color: task.product==='AI for Work' ? p.violet : task.product==='Search AI' ? p.cyan : p.lime,
-                        }}>
-                          {task.product}
-                        </span>
-                      ) : <span style={{ color: p.textMuted, fontSize:10 }}>—</span>}
-                    </td>
-                    {/* Priority */}
-                    <td style={{ padding:'9px 10px', fontSize:11, verticalAlign:'middle',
-                      color: task.priority==='High' ? p.coral : task.priority==='Medium' ? p.amber : task.priority==='Low' ? p.textMuted : p.textMuted,
-                      fontFamily:"'JetBrains Mono',monospace",
-                    }}>
-                      {task.priority || '—'}
-                    </td>
-                    {/* Type */}
-                    <td style={{ padding:'9px 10px', verticalAlign:'middle' }}>
-                      {task.type ? <StatusChip status={task.type} p={p}/> : <span style={{ color: p.textMuted, fontSize:10 }}>—</span>}
-                    </td>
-                    {/* Status */}
-                    <td style={{ padding:'9px 10px', verticalAlign:'middle' }}>
-                      {task.status ? <StatusChip status={task.status} p={p}/> : <span style={{ color: p.textMuted, fontSize:10 }}>—</span>}
-                    </td>
-                    {/* Comment */}
-                    <td style={{ padding:'9px 10px', fontSize:11, color: p.textMuted, fontFamily:"'Inter',sans-serif", lineHeight:1.45, wordBreak:'break-word', verticalAlign:'top' }}>
-                      {task.comment || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* Kanban board */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          alignItems: 'start',
+        }}>
+          {KANBAN_COLS.map(col => (
+            <KanbanColumn
+              key={col.id}
+              colId={col.id}
+              label={col.label}
+              colorKey={col.colorKey}
+              tasks={kanbanGroups[col.id]}
+              onCardClick={setSelectedTask}
+              p={p}
+            />
+          ))}
         </div>
 
         {/* Summary row */}
-        <div style={{ marginTop:16, display:'flex', gap:24, flexWrap:'wrap' }}>
+        <div style={{ marginTop: 28, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           {[
-            { label:'Total',       val: filtered.length,                                              color: p.textBody  },
-            { label:'MOM tasks',   val: filtered.filter(t=>t.source==='MOM').length,                  color: p.violet    },
-            { label:'Activities',  val: filtered.filter(t=>t.source==='Activity').length,             color: p.amber     },
-            { label:'Done',        val: filtered.filter(t=>t.status==='Done').length,                 color: p.lime      },
-            { label:'Blocked',     val: filtered.filter(t=>t.status==='Blocked').length,              color: p.coral     },
+            { label: 'Total',       val: filtered.length,                                    color: p.textBody },
+            { label: 'To Do',       val: kanbanGroups.todo.length,                           color: p.violet   },
+            { label: 'In Progress', val: kanbanGroups.inprogress.length,                     color: p.cyan     },
+            { label: 'Done',        val: kanbanGroups.done.length,                           color: p.lime     },
+            { label: 'Blocked',     val: kanbanGroups.blocked.length,                        color: p.coral    },
           ].map(s => (
-            <div key={s.label} style={{ display:'flex', alignItems:'center', gap:6 }}>
-              <span style={{ fontSize:18, fontWeight:700, fontFamily:"'Space Grotesk',sans-serif", color: s.color, textShadow: p.glow ? `0 0 12px ${s.color}60` : 'none' }}>
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: s.color, textShadow: p.glow ? `0 0 12px ${s.color}60` : 'none' }}>
                 {s.val}
               </span>
-              <span style={{ fontSize:11, color: p.textMuted, fontFamily:"'JetBrains Mono',monospace" }}>{s.label}</span>
+              <span style={{ fontSize: 11, color: p.textMuted, fontFamily: "'JetBrains Mono',monospace" }}>{s.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Page-level calendar — rendered outside overflow:hidden table container */}
-      {openFilter === 'eta' && calendarRect && (
-        <CalendarPicker
-          value={colFilters.eta ?? ''}
-          onSelect={v => setColFilter('eta', v)}
-          onClose={() => { setOpenFilter(null); setCalendarOpen(false); setCalendarRect(null); }}
-          p={p}
-          fixedPos={calendarRect}
-        />
+      {/* Task detail modal */}
+      {selectedTask && (
+        <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} p={p} />
       )}
     </div>
   );
