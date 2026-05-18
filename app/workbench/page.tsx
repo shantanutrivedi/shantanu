@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import type { ActionItem, MOMUpload, MOMUploadVersion, AppState } from '@/lib/types';
+import { getTaskId } from '@/lib/taskUtils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -147,10 +148,13 @@ function EditableCell({ value, col, rowId, onEdit }: {
     if (draft !== value) onEdit(rowId, col, draft);
   }, [draft, value, rowId, col, onEdit]);
 
+  const isMissingProduct = col === 'product' && !draft && !editing;
+
   const cellStyle: React.CSSProperties = {
     padding:'7px 10px', fontSize:11, fontFamily:"'JetBrains Mono',monospace",
     color: p.textPrimary, verticalAlign:'top', cursor:'pointer',
     wordBreak:'break-word', lineHeight:1.5,
+    background: isMissingProduct ? `${p.coral}10` : undefined,
   };
   const inputStyle: React.CSSProperties = {
     background: p.inputBg, border:`1px solid ${p.border}`, borderRadius:6,
@@ -191,7 +195,14 @@ function EditableCell({ value, col, rowId, onEdit }: {
             <option value="">—</option>
             {PRODUCT_OPTIONS.map(o => <option key={o}>{o}</option>)}
           </select>
-        : <span style={{ color: p.textBody }}>{draft || '—'}</span>}
+        : isMissingProduct
+          ? <span style={{ fontSize: 9, color: p.coral, fontFamily: "'JetBrains Mono',monospace",
+              display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: p.coral,
+                display: 'inline-block', flexShrink: 0 }} />
+              Required
+            </span>
+          : <span style={{ color: p.textBody }}>{draft}</span>}
     </td>
   );
 
@@ -239,6 +250,12 @@ function EditableCell({ value, col, rowId, onEdit }: {
 
   return (
     <td style={cellStyle} onClick={() => setEditing(true)}>
+      {col === 'action' && !editing && (
+        <div style={{ fontSize: 9, color: p.violet, fontFamily: "'JetBrains Mono',monospace",
+          marginBottom: 3, letterSpacing: '0.04em' }}>
+          {getTaskId(rowId)}
+        </div>
+      )}
       {editing
         ? <input ref={inputRef as React.RefObject<HTMLInputElement>} value={draft}
             onChange={e => setDraft(e.target.value)} onBlur={commit}
@@ -857,6 +874,122 @@ function MeetingsPanel() {
   );
 }
 
+// ── Product warning modal ─────────────────────────────────────────────────────
+
+const PRODUCT_OPTIONS_LIST = ['AI for Work', 'Search AI', 'Agent Platform'];
+
+function ProductWarningModal({ items, onFix, onClose }: {
+  items: ActionItem[];
+  onFix: (updates: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const p = usePalette();
+  const [drafts, setDrafts] = useState<Record<string, string>>(
+    Object.fromEntries(items.map(i => [i.id, '']))
+  );
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const allFilled = items.every(i => !!drafts[i.id]);
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: p.cardBg, border: `1px solid ${p.coral}40`, borderRadius: 20,
+        padding: '28px 32px', width: '100%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto',
+        boxShadow: p.glow ? `0 0 48px ${p.coral}18, 0 24px 64px rgba(0,0,0,0.5)` : '0 24px 64px rgba(0,0,0,0.25)',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.coral,
+                boxShadow: p.glow ? `0 0 10px ${p.coral}` : 'none', display: 'inline-block' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: p.coral, fontFamily: "'JetBrains Mono',monospace" }}>
+                Product Required
+              </span>
+            </div>
+            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18,
+              color: p.textPrimary, margin: 0 }}>
+              {items.length} item{items.length !== 1 ? 's' : ''} missing a product
+            </h2>
+            <p style={{ fontSize: 12, color: p.textMuted, fontFamily: "'Inter',sans-serif",
+              margin: '6px 0 0', lineHeight: 1.5 }}>
+              Product is a mandatory field. Assign a product to each item before saving.
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer',
+            color: p.textMuted, fontSize: 20, lineHeight: 1, padding: '2px 6px', flexShrink: 0 }}>×</button>
+        </div>
+
+        {/* Items list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ background: p.inputBg, borderRadius: 12, padding: '12px 14px',
+              border: `1px solid ${drafts[item.id] ? p.border : p.coral + '40'}` }}>
+              <div style={{ fontSize: 9, color: p.violet, fontFamily: "'JetBrains Mono',monospace",
+                marginBottom: 4 }}>
+                {getTaskId(item.id)}
+              </div>
+              <div style={{ fontSize: 12, color: p.textPrimary, fontFamily: "'Inter',sans-serif",
+                marginBottom: 10, lineHeight: 1.4,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.action || 'Untitled item'}
+              </div>
+              <select
+                value={drafts[item.id]}
+                onChange={e => setDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                style={{
+                  width: '100%', background: p.cardBg, border: `1px solid ${p.border}`,
+                  borderRadius: 8, padding: '6px 10px', color: drafts[item.id] ? p.textPrimary : p.textMuted,
+                  fontFamily: "'Inter',sans-serif", fontSize: 12, outline: 'none',
+                }}
+              >
+                <option value="">— Select product —</option>
+                {PRODUCT_OPTIONS_LIST.map(pr => (
+                  <option key={pr} value={pr}>{pr}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => allFilled && onFix(drafts)}
+            disabled={!allFilled}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: allFilled ? 'pointer' : 'not-allowed',
+              background: allFilled ? 'linear-gradient(135deg,#534AB7,#7F77DD)' : p.inputBg,
+              color: allFilled ? '#EEEDFE' : p.textMuted,
+              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13,
+              transition: 'all 0.15s',
+            }}>
+            Assign & Save
+          </button>
+          <button onClick={onClose} style={{
+            padding: '10px 20px', borderRadius: 10, border: `1px solid ${p.border}`,
+            background: 'none', cursor: 'pointer', color: p.textMuted,
+            fontFamily: "'Space Grotesk',sans-serif", fontSize: 13,
+          }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function WorkbenchPage() {
@@ -873,6 +1006,7 @@ export default function WorkbenchPage() {
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
   const [showResolver, setShowResolver] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<DuplicatePair | null>(null);
+  const [showProductModal, setShowProductModal] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1012,6 +1146,13 @@ export default function WorkbenchPage() {
   // Version-aware save: group by filename + projectId
   const handleSave = useCallback(() => {
     if (!appState || parsedItems.length === 0) return;
+
+    // Block save if any item is missing a product
+    const missingProduct = parsedItems.filter(item => !VALID_PRODUCTS.has(item.product));
+    if (missingProduct.length > 0) {
+      setShowProductModal(true);
+      return;
+    }
 
     const taggedItems = parsedItems.map(item => ({
       ...item,
@@ -1330,6 +1471,22 @@ export default function WorkbenchPage() {
       {/* Action Table */}
       {parsedItems.length > 0 && (
         <div style={{ marginTop:32 }}>
+
+          {/* Product missing banner */}
+          {parsedItems.some(item => !VALID_PRODUCTS.has(item.product)) && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+              padding: '10px 16px', borderRadius: 10,
+              background: `${p.coral}10`, border: `1px solid ${p.coral}35`,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.coral,
+                boxShadow: p.glow ? `0 0 8px ${p.coral}` : 'none', display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: p.coral, fontFamily: "'JetBrains Mono',monospace", flex: 1 }}>
+                {parsedItems.filter(i => !VALID_PRODUCTS.has(i.product)).length} item{parsedItems.filter(i => !VALID_PRODUCTS.has(i.product)).length !== 1 ? 's are' : ' is'} missing a Product — click the highlighted cells to assign one
+              </span>
+            </div>
+          )}
+
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -1396,6 +1553,21 @@ export default function WorkbenchPage() {
           pair={mergeTarget}
           onConfirm={handleMergeConfirm}
           onCancel={() => setMergeTarget(null)}
+        />
+      )}
+
+      {showProductModal && (
+        <ProductWarningModal
+          items={parsedItems.filter(item => !VALID_PRODUCTS.has(item.product))}
+          onFix={(updates) => {
+            setParsedItems(prev => prev.map(item =>
+              updates[item.id] ? { ...item, product: updates[item.id] } : item
+            ));
+            setShowProductModal(false);
+            // Re-trigger save after fix — use a small timeout so state settles
+            setTimeout(() => handleSave(), 50);
+          }}
+          onClose={() => setShowProductModal(false)}
         />
       )}
 

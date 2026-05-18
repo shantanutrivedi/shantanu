@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { loadState, onUserChange } from '@/lib/store';
 import type { AppState, Project, ActionItem, DailyActivity } from '@/lib/types';
+import { getTaskId } from '@/lib/taskUtils';
 import KPICard from '@/components/KPICard';
 import StatusPill from '@/components/StatusPill';
 import PriorityBadge from '@/components/PriorityBadge';
@@ -209,6 +210,9 @@ function ActionSummaryTable({ actions }: { actions: ActionItem[] }) {
                 }}
               >
                 <td style={{ padding: '9px 14px', fontSize: 12, color: p.textPrimary, fontFamily: "'Inter',sans-serif", maxWidth: 220 }}>
+                  <div style={{ fontSize: 9, color: p.violet, fontFamily: "'JetBrains Mono',monospace", marginBottom: 2, letterSpacing: '0.04em' }}>
+                    {getTaskId(a.id)}
+                  </div>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.action}</div>
                   {a.comment && (
                     <div style={{ fontSize: 10, color: p.textMuted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

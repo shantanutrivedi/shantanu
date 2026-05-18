@@ -7,6 +7,7 @@ import { loadJiraConfig } from '@/lib/userConfig';
 import { usePalette } from '@/lib/palette';
 import type { Palette } from '@/lib/palette';
 import type { AppState, ActionItem } from '@/lib/types';
+import { getTaskId, getActivityId } from '@/lib/taskUtils';
 
 // ── Unified task ──────────────────────────────────────────────────────────────
 
@@ -48,8 +49,7 @@ export function fmtDate(raw: string): string {
 }
 
 function getDisplayId(task: Task): string {
-  const raw = task.id.replace(/^(mom|act)-/, '');
-  return `SH-${raw.slice(-5).toUpperCase()}`;
+  return task.source === 'MOM' ? getTaskId(task.id) : getActivityId(task.id);
 }
 
 type KanbanStatus = 'todo' | 'inprogress' | 'done' | 'blocked';
@@ -365,9 +365,9 @@ function KanbanCard({ task, onClick, p }: { task: Task; onClick: () => void; p: 
         )}
       </div>
 
-      {/* Product tag if present */}
-      {task.product && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${p.borderTint}` }}>
+      {/* Product tag — warning if missing */}
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${p.borderTint}` }}>
+        {task.product ? (
           <span style={{
             fontSize: 9, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600,
             color: task.product === 'AI for Work' ? p.violet
@@ -376,8 +376,16 @@ function KanbanCard({ task, onClick, p }: { task: Task; onClick: () => void; p: 
           }}>
             {task.product}
           </span>
-        </div>
-      )}
+        ) : task.source === 'MOM' ? (
+          <span style={{
+            fontSize: 9, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600,
+            color: p.coral, display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: p.coral, display: 'inline-block' }} />
+            No product set
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

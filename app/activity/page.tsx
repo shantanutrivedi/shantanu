@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { loadState, saveState, onUserChange } from '@/lib/store';
 import { usePalette } from '@/lib/palette';
 import type { AppState, DailyActivity } from '@/lib/types';
+import { getActivityId } from '@/lib/taskUtils';
 
 // ── Type color maps ───────────────────────────────────────────────────────────
 const TYPE_COLORS_DARK: Record<DailyActivity['type'], string> = {
@@ -186,9 +187,10 @@ export default function ActivityPage() {
     if (!activity.trim()) errs.activity = 'Required';
     if (!date)            errs.date = 'Required';
     if (hours <= 0)       errs.hours = 'Must be > 0';
+    if (!product)         errs.product = 'Required';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
-  }, [team, activity, date, hours]);
+  }, [team, activity, date, hours, product]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -420,17 +422,21 @@ export default function ActivityPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Product</label>
+              <label style={{ ...labelStyle, color: fieldErrors.product ? p.coral : p.textMuted }}>
+                Product <span style={{ color: p.coral }}>*</span>
+              </label>
               <select
                 value={product}
                 onChange={e => setProduct(e.target.value)}
-                style={{ ...inputBase, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}
+                style={{ ...inputBase, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none',
+                  ...(fieldErrors.product ? errorInputStyle : {}) }}
               >
                 <option value="" style={{ background: p.cardSolid, color: p.textMuted }}>— Select product —</option>
                 {PRODUCTS.map(pr => (
                   <option key={pr} value={pr} style={{ background: p.cardSolid, color: p.textPrimary }}>{pr}</option>
                 ))}
               </select>
+              {fieldErrors.product && <div style={errMsgStyle}>{fieldErrors.product}</div>}
             </div>
           </div>
 
@@ -580,6 +586,19 @@ export default function ActivityPage() {
                   <TypeBadge type={entry.type} />
 
                   <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 9, color: p.violet, fontFamily: "'JetBrains Mono',monospace",
+                        letterSpacing: '0.04em', flexShrink: 0 }}>
+                        {getActivityId(entry.id)}
+                      </span>
+                      {entry.product && (
+                        <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600,
+                          color: entry.product === 'AI for Work' ? p.violet
+                            : entry.product === 'Search AI' ? p.cyan : p.lime }}>
+                          {entry.product}
+                        </span>
+                      )}
+                    </div>
                     <div style={{
                       fontFamily: "'Inter',sans-serif",
                       fontSize: 14,
