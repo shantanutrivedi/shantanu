@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/agents/risk-scan",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/agents/renew-webhook",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}
