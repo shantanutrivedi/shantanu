@@ -148,7 +148,7 @@ function EditableCell({ value, col, rowId, onEdit }: {
     if (draft !== value) onEdit(rowId, col, draft);
   }, [draft, value, rowId, col, onEdit]);
 
-  const isMissingProduct = col === 'product' && !draft && !editing;
+  const isMissingProduct = col === 'product' && !VALID_PRODUCTS.has(draft) && !editing;
 
   const cellStyle: React.CSSProperties = {
     padding:'7px 10px', fontSize:11, fontFamily:"'JetBrains Mono',monospace",
@@ -1250,16 +1250,33 @@ export default function WorkbenchPage() {
     setSaved(false);
   }
 
-  // Group uploads by filename+project for the sidebar
+  // Group uploads by filename+project for the sidebar.
+  // If duplicates exist (from historical stale-appState saves), merge their version
+  // histories so the user sees the full history, not just the most recent shell.
   const uploadGroups = (() => {
     const uploads = appState?.momUploads ?? [];
-    const seen = new Set<string>();
-    const groups: MOMUpload[] = [];
+    const byKey = new Map<string, MOMUpload>();
     for (const u of uploads) {
       const key = `${u.filename}::${u.projectId}`;
-      if (!seen.has(key)) { seen.add(key); groups.push(u); }
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, { ...u, versions: u.versions ?? [{ version: 1, savedAt: u.uploadedAt, parsedItems: u.parsedItems }] });
+      } else {
+        // Merge version lists, deduplicate by savedAt, keep highest count
+        const merged = [...(existing.versions ?? []), ...(u.versions ?? [{ version: 1, savedAt: u.uploadedAt, parsedItems: u.parsedItems }])];
+        const seenSaved = new Set<string>();
+        const deduped = merged.filter(v => {
+          if (seenSaved.has(v.savedAt)) return false;
+          seenSaved.add(v.savedAt);
+          return true;
+        }).sort((a, b) => new Date(a.savedAt).getTime() - new Date(b.savedAt).getTime())
+          .map((v, i) => ({ ...v, version: i + 1 }));
+        // Keep whichever base upload has the freshest parsedItems
+        const base = (existing.versions?.length ?? 0) >= (u.versions?.length ?? 0) ? existing : u;
+        byKey.set(key, { ...base, versions: deduped });
+      }
     }
-    return groups.slice(0, 8);
+    return [...byKey.values()].slice(0, 8);
   })();
 
   const cardStyle: React.CSSProperties = { background: p.cardBg, border:`1px solid ${p.border}`, borderRadius:16, padding:24 };

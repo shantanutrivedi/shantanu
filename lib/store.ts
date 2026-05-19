@@ -122,7 +122,32 @@ export function loadState(): AppState {
         return true;
       });
 
-      // Persist the backfilled data so it survives future loads
+      // Deduplicate momUploads: historical stale-appState saves created duplicate
+      // upload objects (one per save session). Merge their version histories so the
+      // full history survives and the richest entry is kept.
+      const momByKey = new Map<string, (typeof state.momUploads)[number]>();
+      for (const u of (state.momUploads || [])) {
+        const key = `${u.filename}::${u.projectId}`;
+        const ex = momByKey.get(key);
+        if (!ex) {
+          momByKey.set(key, { ...u, versions: u.versions ?? [{ version: 1, savedAt: u.uploadedAt, parsedItems: u.parsedItems }] });
+        } else {
+          const merged = [...(ex.versions ?? []), ...(u.versions ?? [{ version: 1, savedAt: u.uploadedAt, parsedItems: u.parsedItems }])];
+          const seenSaved = new Set<string>();
+          const deduped = merged
+            .filter(v => { if (seenSaved.has(v.savedAt)) return false; seenSaved.add(v.savedAt); return true; })
+            .sort((a, b) => new Date(a.savedAt).getTime() - new Date(b.savedAt).getTime())
+            .map((v, i) => ({ ...v, version: i + 1 }));
+          const base = (ex.versions?.length ?? 0) >= (u.versions?.length ?? 0) ? ex : u;
+          momByKey.set(key, { ...base, versions: deduped });
+        }
+      }
+      if (momByKey.size !== (state.momUploads?.length ?? 0)) {
+        state.momUploads = [...momByKey.values()];
+        dirty = true;
+      }
+
+      // Persist the backfilled / deduped data so it survives future loads
       if (dirty) setKey(stateKey(), JSON.stringify(state));
 
       return state;
