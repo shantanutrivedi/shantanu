@@ -1151,26 +1151,35 @@ export default function WorkbenchPage() {
     setSaved(false);
   }, []);
 
-  // Version-aware save: group by filename + projectId
-  const handleSave = useCallback(() => {
-    if (!appState || parsedItems.length === 0) return;
+  // Version-aware save: group by filename + projectId.
+  // Reads loadState() directly (not appState closure) so inline edits auto-persisted
+  // by handleEditItem are always captured even if appState is stale.
+  // Accepts overrideItems so the product modal can pass the fixed list without a
+  // stale closure causing the modal to re-open immediately.
+  const handleSave = useCallback((overrideItems?: ActionItem[]) => {
+    const items = overrideItems ?? parsedItems;
+    if (items.length === 0) return;
 
-    // Block save if any item is missing a product
-    const missingProduct = parsedItems.filter(item => !VALID_PRODUCTS.has(item.product));
-    if (missingProduct.length > 0) {
-      setShowProductModal(true);
-      return;
+    // Product check only on normal (non-override) saves
+    if (!overrideItems) {
+      const missingProduct = items.filter(item => !VALID_PRODUCTS.has(item.product));
+      if (missingProduct.length > 0) {
+        setShowProductModal(true);
+        return;
+      }
     }
 
-    const taggedItems = parsedItems.map(item => ({
+    const state = loadState(); // always fresh — never stale
+
+    const taggedItems = items.map(item => ({
       ...item,
-      projectId: appState.activeProjectId,
+      projectId: state.activeProjectId,
       product: VALID_PRODUCTS.has(item.product) ? item.product : '',
     }));
     const incomingIds = new Set(taggedItems.map(t => t.id));
 
-    const existingGroup = (appState.momUploads ?? []).find(u =>
-      u.filename === filename && u.projectId === appState.activeProjectId
+    const existingGroup = (state.momUploads ?? []).find(u =>
+      u.filename === filename && u.projectId === state.activeProjectId
     );
 
     let updatedUploads: MOMUpload[];
@@ -1184,27 +1193,27 @@ export default function WorkbenchPage() {
         parsedItems: taggedItems,
         versions: [...prevVersions, { version: prevVersions.length + 1, savedAt: new Date().toISOString(), parsedItems: taggedItems }],
       };
-      updatedUploads = [updatedGroup, ...(appState.momUploads ?? []).filter(u => u.id !== existingGroup.id)];
+      updatedUploads = [updatedGroup, ...(state.momUploads ?? []).filter(u => u.id !== existingGroup.id)];
     } else {
       const newUpload: MOMUpload = {
         id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
         filename, uploadedAt: new Date().toISOString(),
-        projectId: appState.activeProjectId, rawText,
+        projectId: state.activeProjectId, rawText,
         parsedItems: taggedItems,
         versions: [{ version: 1, savedAt: new Date().toISOString(), parsedItems: taggedItems }],
       };
-      updatedUploads = [newUpload, ...(appState.momUploads ?? [])];
+      updatedUploads = [newUpload, ...(state.momUploads ?? [])];
     }
 
     const newState: AppState = {
-      ...appState,
-      actionItems: [...appState.actionItems.filter(a => !incomingIds.has(a.id)), ...taggedItems],
+      ...state,
+      actionItems: [...state.actionItems.filter(a => !incomingIds.has(a.id)), ...taggedItems],
       momUploads: updatedUploads,
     };
     saveState(newState);
     setAppState(newState);
     setSaved(true);
-  }, [appState, parsedItems, filename, rawText]);
+  }, [parsedItems, filename, rawText]); // appState intentionally excluded — read fresh inside
 
   // Duplicate resolver callbacks
   function handleDuplicateDelete(which: 'incoming' | 'existing', item: ActionItem) {
@@ -1604,7 +1613,7 @@ export default function WorkbenchPage() {
                   Saved to dashboard
                 </span>
               )}
-              <button onClick={handleSave}
+              <button onClick={() => handleSave()}
                 style={{ ...primaryBtnStyle,
                   background: saved ? `linear-gradient(135deg,${p.lime}33,${p.lime}22)` : 'linear-gradient(135deg,#534AB7,#7F77DD)',
                   boxShadow: saved ? (p.glow ? p.glowStr(p.lime, 20) : 'none') : (p.glow ? '0 0 20px rgba(83,74,183,0.45)' : 'none'),
@@ -1648,12 +1657,15 @@ export default function WorkbenchPage() {
         <ProductWarningModal
           items={parsedItems.filter(item => !VALID_PRODUCTS.has(item.product))}
           onFix={(updates) => {
-            setParsedItems(prev => prev.map(item =>
+            // Compute fixed items synchronously and pass directly to handleSave.
+            // Do NOT use setTimeout + handleSave() — that captures a stale closure
+            // (old parsedItems without the product fixes) and re-opens the modal.
+            const fixedItems = parsedItems.map(item =>
               updates[item.id] ? { ...item, product: updates[item.id] } : item
-            ));
+            );
+            setParsedItems(fixedItems);
             setShowProductModal(false);
-            // Re-trigger save after fix — use a small timeout so state settles
-            setTimeout(() => handleSave(), 50);
+            handleSave(fixedItems);
           }}
           onClose={() => setShowProductModal(false)}
         />
